@@ -25,7 +25,7 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 ## 기본 워크플로우(권장)
 
 1. `scripts/confluence_cli.py search`로 관련 페이지를 찾습니다.
-2. `scripts/confluence_cli.py get`로 본문을 가져옵니다(LLM 처리 목적이면 `--convert-to-markdown` 권장).
+2. `scripts/confluence_cli.py get`로 본문을 가져옵니다(기본: HTML, LLM 처리 목적이면 `--convert-to-markdown` 옵션 사용).
 3. 새 문서면 `create`, 기존 문서 수정이면 `update`를 사용합니다.
 4. 변경 이력/추가 설명은 `comment`로 남깁니다.
 
@@ -35,11 +35,12 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
   - `python3 scripts/confluence_cli.py search --query "deployment guide" --limit 10`
   - `--spaces-filter ""`를 주면 space 필터를 강제로 해제합니다.
 - 페이지 조회
-  - `python3 scripts/confluence_cli.py get --page-id 123456 --convert-to-markdown`
+  - `python3 scripts/confluence_cli.py get --page-id 123456` (기본: HTML)
+  - `python3 scripts/confluence_cli.py get --page-id 123456 --convert-to-markdown` (Markdown 변환)
   - 또는 `python3 scripts/confluence_cli.py get --space-key DEV --title "문서 제목"`
 - 페이지 생성/수정/댓글
-  - `--format` 기본은 `markdown`이며, 스크립트가 Confluence storage HTML로 변환해 업로드합니다.
-  - 이미 storage/wiki 포맷을 갖고 있으면 `--format storage|wiki`로 그대로 전달합니다.
+  - `--format` 기본은 `storage`(HTML)이며, 본문을 그대로 Confluence에 업로드합니다.
+  - Markdown으로 작성하려면 `--format markdown`을 지정하면 스크립트가 HTML로 변환합니다.
 
 ## 예시
 
@@ -52,6 +53,12 @@ python3 scripts/confluence_cli.py search \
 ```
 
 ```bash
+# HTML로 조회 (기본값)
+python3 scripts/confluence_cli.py get \
+  --page-id 123456789 \
+  --include-metadata
+
+# Markdown으로 변환해서 조회
 python3 scripts/confluence_cli.py get \
   --page-id 123456789 \
   --convert-to-markdown \
@@ -61,6 +68,13 @@ python3 scripts/confluence_cli.py get \
 ### 페이지 생성
 
 ```bash
+# HTML로 생성 (기본값)
+python3 scripts/confluence_cli.py create \
+  --space DEV \
+  --title '릴리즈 노트 - 2026-01-07' \
+  --content '<h1>릴리즈 노트</h1><p>본문 내용</p>'
+
+# Markdown 파일로 생성
 python3 scripts/confluence_cli.py create \
   --space DEV \
   --title '릴리즈 노트 - 2026-01-07' \
