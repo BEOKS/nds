@@ -11,6 +11,8 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 - 페이지 조회(page_id 또는 title+space_key)
 - 페이지 생성/수정/삭제
 - 댓글 추가
+- **첨부파일 목록 조회**
+- **첨부파일 다운로드** (개별 또는 전체)
 - Markdown ↔ Confluence storage HTML(간이 변환)
 
 ## 사전 조건(환경변수)
@@ -45,6 +47,12 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 - 페이지 생성/수정/댓글
   - `--format` 기본은 `storage`(HTML)이며, 본문을 그대로 Confluence에 업로드합니다.
   - Markdown으로 작성하려면 `--format markdown`을 지정하면 스크립트가 HTML로 변환합니다.
+- 첨부파일 목록 조회
+  - `python3 scripts/confluence_cli.py attachments --page-id 123456`
+- 첨부파일 다운로드
+  - `python3 scripts/confluence_cli.py download --page-id 123456` (전체 다운로드)
+  - `python3 scripts/confluence_cli.py download --page-id 123456 --filename "문서.pdf"` (특정 파일)
+  - `python3 scripts/confluence_cli.py download --page-id 123456 -o ./downloads` (저장 경로 지정)
 
 ## 예시
 
@@ -107,4 +115,32 @@ python3 scripts/confluence_cli.py comment \
   --page-id 123456789 \
   --format markdown \
   --content '변경 요약: 배포 후 모니터링 항목을 추가했습니다.'
+```
+
+### 첨부파일 조회 및 다운로드
+
+```bash
+# 첨부파일 목록 조회
+python3 scripts/confluence_cli.py attachments \
+  --page-id 123456789
+
+# 출력 예시:
+# [{"id": "att123", "title": "guide.pdf", "mediaType": "application/pdf", "fileSize": 1234567, ...}]
+```
+
+```bash
+# 모든 첨부파일 다운로드 (현재 디렉토리)
+python3 scripts/confluence_cli.py download \
+  --page-id 123456789
+
+# 특정 파일만 다운로드
+python3 scripts/confluence_cli.py download \
+  --page-id 123456789 \
+  --filename "가이드문서.pdf"
+
+# 지정 경로에 다운로드 (기존 파일 덮어쓰기)
+python3 scripts/confluence_cli.py download \
+  --page-id 123456789 \
+  --output-dir ./attachments \
+  --overwrite
 ```

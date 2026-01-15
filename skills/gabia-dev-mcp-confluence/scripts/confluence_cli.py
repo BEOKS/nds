@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -538,6 +539,125 @@ def cmd_comment(args: argparse.Namespace) -> None:
     print(json.dumps(created, ensure_ascii=False))
 
 
+def cmd_attachments(args: argparse.Namespace) -> None:
+    """List attachments for a Confluence page."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+
+    if not args.page_id:
+        raise SystemExit("[ERROR] Provide --page-id.")
+
+    url = f"{base_url}/rest/api/content/{args.page_id}/child/attachment"
+    params = {"limit": str(args.limit)} if args.limit else None
+    payload = _http_json("GET", url, params=params)
+
+    results = payload.get("results") or []
+    attachments: list[dict] = []
+    for att in results:
+        att_id = att.get("id")
+        title = att.get("title")
+        media_type = att.get("metadata", {}).get("mediaType") or att.get("extensions", {}).get("mediaType")
+        file_size = att.get("extensions", {}).get("fileSize")
+        download_link = att.get("_links", {}).get("download")
+
+        attachments.append({
+            "id": att_id,
+            "title": title,
+            "mediaType": media_type,
+            "fileSize": file_size,
+            "downloadPath": download_link,
+            "downloadUrl": f"{base_url}{download_link}" if download_link else None,
+        })
+
+    print(json.dumps(attachments, ensure_ascii=False))
+
+
+def _http_download(url: str, output_path: str) -> int:
+    """Download a file from URL to output_path. Returns bytes written."""
+    headers = {
+        "Authorization": _build_auth_header(),
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            with open(output_path, "wb") as f:
+                total = 0
+                while True:
+                    chunk = resp.read(8192)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total += len(chunk)
+                return total
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"[ERROR] Download failed: {e.code} {e.reason}\n{err_body}") from None
+    except urllib.error.URLError as e:
+        raise SystemExit(f"[ERROR] Network error during download: {e}") from None
+
+
+def cmd_download(args: argparse.Namespace) -> None:
+    """Download attachment(s) from a Confluence page."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+
+    if not args.page_id:
+        raise SystemExit("[ERROR] Provide --page-id.")
+
+    # Get attachments list
+    url = f"{base_url}/rest/api/content/{args.page_id}/child/attachment"
+    payload = _http_json("GET", url, params={"limit": "100"})
+    results = payload.get("results") or []
+
+    if not results:
+        raise SystemExit("[ERROR] No attachments found for this page.")
+
+    # Filter by filename if specified (case-insensitive, partial match supported)
+    # Unicode normalization for Korean filenames (NFC vs NFD)
+    def normalize(s: str) -> str:
+        return unicodedata.normalize("NFC", s) if s else ""
+
+    if args.filename:
+        search_term = normalize(args.filename.lower())
+        filtered = [att for att in results if att.get("title") and search_term in normalize(att.get("title", "").lower())]
+        # Try exact match first
+        exact = [att for att in results if normalize(att.get("title") or "") == normalize(args.filename)]
+        results = exact if exact else filtered
+        if not results:
+            available = [att.get("title") for att in payload.get("results") or []]
+            raise SystemExit(f"[ERROR] Attachment not found: {args.filename}\nAvailable: {available}")
+
+    # Determine output directory
+    output_dir = args.output_dir or "."
+    os.makedirs(output_dir, exist_ok=True)
+
+    downloaded: list[dict] = []
+    for att in results:
+        title = att.get("title")
+        download_link = att.get("_links", {}).get("download")
+        if not download_link:
+            continue
+
+        download_url = f"{base_url}{download_link}"
+        output_path = os.path.join(output_dir, title)
+
+        # Handle filename conflicts
+        if os.path.exists(output_path) and not args.overwrite:
+            base_name, ext = os.path.splitext(title)
+            counter = 1
+            while os.path.exists(output_path):
+                output_path = os.path.join(output_dir, f"{base_name}_{counter}{ext}")
+                counter += 1
+
+        bytes_written = _http_download(download_url, output_path)
+        downloaded.append({
+            "filename": title,
+            "savedAs": output_path,
+            "size": bytes_written,
+        })
+
+    print(json.dumps({"success": True, "downloaded": downloaded}, ensure_ascii=False))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Confluence CLI (no MCP required)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -589,6 +709,18 @@ def build_parser() -> argparse.ArgumentParser:
     cm.add_argument("--content")
     cm.add_argument("--content-file")
     cm.set_defaults(func=cmd_comment)
+
+    att = sub.add_parser("attachments", help="List attachments for a Confluence page")
+    att.add_argument("--page-id", required=True)
+    att.add_argument("--limit", type=int, default=50, help="Max number of attachments to return")
+    att.set_defaults(func=cmd_attachments)
+
+    dl = sub.add_parser("download", help="Download attachment(s) from a Confluence page")
+    dl.add_argument("--page-id", required=True)
+    dl.add_argument("--filename", help="Specific attachment filename to download (downloads all if not specified)")
+    dl.add_argument("--output-dir", "-o", default=".", help="Directory to save downloaded files")
+    dl.add_argument("--overwrite", action="store_true", default=False, help="Overwrite existing files")
+    dl.set_defaults(func=cmd_download)
 
     return p
 
