@@ -25,7 +25,10 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 ## 기본 워크플로우(권장)
 
 1. `scripts/confluence_cli.py search`로 관련 페이지를 찾습니다.
-2. `scripts/confluence_cli.py get`로 본문을 가져옵니다(기본: HTML, LLM 처리 목적이면 `--convert-to-markdown` 옵션 사용).
+2. `scripts/confluence_cli.py get`로 본문을 가져옵니다.
+   - 기본: HTML (렌더링된 결과)
+   - `--output-format storage`: 원본 XML (매크로 포함)
+   - `--output-format markdown`: Markdown 변환 (LLM 처리용)
 3. 새 문서면 `create`, 기존 문서 수정이면 `update`를 사용합니다.
 4. 변경 이력/추가 설명은 `comment`로 남깁니다.
 
@@ -36,7 +39,8 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
   - `--spaces-filter ""`를 주면 space 필터를 강제로 해제합니다.
 - 페이지 조회
   - `python3 scripts/confluence_cli.py get --page-id 123456` (기본: HTML)
-  - `python3 scripts/confluence_cli.py get --page-id 123456 --convert-to-markdown` (Markdown 변환)
+  - `python3 scripts/confluence_cli.py get --page-id 123456 --output-format storage` (원본 XML, 매크로 포함)
+  - `python3 scripts/confluence_cli.py get --page-id 123456 --output-format markdown` (Markdown 변환)
   - 또는 `python3 scripts/confluence_cli.py get --space-key DEV --title "문서 제목"`
 - 페이지 생성/수정/댓글
   - `--format` 기본은 `storage`(HTML)이며, 본문을 그대로 Confluence에 업로드합니다.
@@ -53,15 +57,21 @@ python3 scripts/confluence_cli.py search \
 ```
 
 ```bash
-# HTML로 조회 (기본값)
+# HTML로 조회 (기본값, 렌더링된 결과)
 python3 scripts/confluence_cli.py get \
   --page-id 123456789 \
+  --include-metadata
+
+# Storage format으로 조회 (원본 XML, 매크로 코드 확인 가능)
+python3 scripts/confluence_cli.py get \
+  --page-id 123456789 \
+  --output-format storage \
   --include-metadata
 
 # Markdown으로 변환해서 조회
 python3 scripts/confluence_cli.py get \
   --page-id 123456789 \
-  --convert-to-markdown \
+  --output-format markdown \
   --include-metadata
 ```
 

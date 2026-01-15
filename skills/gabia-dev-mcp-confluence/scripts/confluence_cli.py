@@ -373,14 +373,27 @@ def _get_labels(base_url: str, page_id: str) -> list[str]:
     return out
 
 
-def _extract_body(page_obj: dict, *, convert_to_markdown: bool) -> tuple[str, str]:
+def _extract_body(page_obj: dict, *, output_format: str) -> tuple[str, str]:
+    """Extract body content in the requested format.
+
+    Args:
+        page_obj: The page object from Confluence API
+        output_format: One of 'storage', 'html', 'markdown'
+
+    Returns:
+        Tuple of (format_name, body_content)
+    """
     body = page_obj.get("body") or {}
     export_view = ((body.get("export_view") or {}) if isinstance(body, dict) else {}).get("value")
     storage = ((body.get("storage") or {}) if isinstance(body, dict) else {}).get("value")
-    html = export_view or storage or ""
-    if convert_to_markdown:
+
+    if output_format == "storage":
+        return "storage", storage or ""
+    elif output_format == "markdown":
+        html = export_view or storage or ""
         return "markdown", html_to_markdown_light(html)
-    return "html", html
+    else:  # html (default)
+        return "html", export_view or storage or ""
 
 
 def _build_page_url(base_url: str, space_key: str | None, page_id: str | None) -> str | None:
@@ -396,7 +409,14 @@ def cmd_get(args: argparse.Namespace) -> None:
         raise SystemExit("[ERROR] Provide --page-id or (--title and --space-key).")
 
     include_metadata = args.include_metadata
-    convert_to_markdown = args.convert_to_markdown
+
+    # Determine output format (priority: --output-format > --convert-to-markdown > default html)
+    if args.output_format:
+        output_format = args.output_format
+    elif args.convert_to_markdown:
+        output_format = "markdown"
+    else:
+        output_format = "html"
 
     expand_with_meta = "body.export_view,body.storage,version,space,history"
     expand_no_meta = "body.export_view,body.storage"
@@ -415,7 +435,7 @@ def cmd_get(args: argparse.Namespace) -> None:
     if include_metadata and page_id:
         labels = _get_labels(base_url, str(page_id))
 
-    fmt, body_text = _extract_body(page_obj, convert_to_markdown=convert_to_markdown)
+    fmt, body_text = _extract_body(page_obj, output_format=output_format)
     url = _build_page_url(base_url, space_key, str(page_id) if page_id is not None else None)
 
     version = page_obj.get("version") or {}
@@ -533,7 +553,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--title")
     g.add_argument("--space-key")
     g.add_argument("--include-metadata", action=argparse.BooleanOptionalAction, default=True)
-    g.add_argument("--convert-to-markdown", action=argparse.BooleanOptionalAction, default=False)
+    g.add_argument("--output-format", choices=["html", "storage", "markdown"],
+                   help="Output format: html (rendered), storage (raw XML with macros), markdown")
+    g.add_argument("--convert-to-markdown", action=argparse.BooleanOptionalAction, default=False,
+                   help="(Deprecated) Use --output-format markdown instead")
     g.set_defaults(func=cmd_get)
 
     c = sub.add_parser("create", help="Create a Confluence page")
