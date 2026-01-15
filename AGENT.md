@@ -37,8 +37,30 @@ nds/
 ├── CLAUDE.md      # Claude Code 설정
 ├── AGENT.md       # 에이전트 지침
 ├── README.md      # 프로젝트 소개
+├── scripts/       # 설정 및 유틸리티 스크립트
+│   └── setup-skills.sh  # Skills 설치 스크립트
+├── skills/        # Claude Code Skills 모음
 └── note/          # 개발 노트 및 인사이트
     └── README.md  # 노트 가이드
+```
+
+## 설정 명령어
+
+### Skills 설치
+프로젝트의 skills를 `~/.claude/skills`로 복사:
+
+```bash
+# 기본 설치
+./scripts/setup-skills.sh
+
+# 기존 파일 덮어쓰기
+./scripts/setup-skills.sh -f
+
+# 미리보기 (실제 복사 안 함)
+./scripts/setup-skills.sh -n
+
+# 도움말
+./scripts/setup-skills.sh -h
 ```
 
 ## 주요 작업 영역
