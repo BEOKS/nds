@@ -1,0 +1,7 @@
+{
+  "name": "pptgen",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Local helper to generate sample PPTX",
+  "type": "commonjs"
+}
