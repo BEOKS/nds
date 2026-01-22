@@ -26,6 +26,14 @@ NDS 프로젝트의 MCP 스킬 모음입니다.
 | | `ORACLE_PORT` | Oracle DB 포트 (기본값: 1521) |
 | | `ORACLE_SID` | Oracle SID (기본값: DEVGABIA) |
 | | `ORACLE_SERVICE_NAME` | Oracle 서비스명 (선택) |
+| **MySQL** | `MYSQL_ACCOUNTS` | 다중 계정 JSON (배열 또는 객체) |
+| | `MYSQL_DEFAULT_ACCOUNT` | 기본 계정명 (다중 계정 시) |
+| | `MYSQL_DEFAULT_SCHEMA` | 기본 스키마 |
+| | `MYSQL_HOST` | MySQL 호스트 (단일 계정 시 필수) |
+| | `MYSQL_USERNAME` | MySQL 사용자명 (단일 계정 시 필수) |
+| | `MYSQL_PASSWORD` | MySQL 비밀번호 (단일 계정 시 필수) |
+| | `MYSQL_PORT` | MySQL 포트 (기본값: 3306) |
+| | `MYSQL_DATABASE` | 기본 DB/스키마 (단일 계정 시) |
 
 ### 인증 방식별 설정 가이드
 
@@ -87,6 +95,29 @@ export ORACLE_SID="DEVGABIA"        # 기본값: DEVGABIA
 export ORACLE_SERVICE_NAME=""       # 서비스명 사용 시 설정
 ```
 
+#### MySQL
+
+다중 계정 예시:
+
+```bash
+export MYSQL_ACCOUNTS='[
+  {"name":"dev","host":"127.0.0.1","port":3306,"username":"app","password":"secret","database":"app_db"},
+  {"name":"report","host":"10.0.0.10","username":"ro","password":"secret","database":"report_db"}
+]'
+export MYSQL_DEFAULT_ACCOUNT="dev"
+export MYSQL_DEFAULT_SCHEMA="app_db"
+```
+
+단일 계정 예시:
+
+```bash
+export MYSQL_HOST="your-mysql-host"
+export MYSQL_USERNAME="your-username"
+export MYSQL_PASSWORD="your-password"
+export MYSQL_PORT="3306"
+export MYSQL_DATABASE="your-db"
+```
+
 ## 스킬 목록
 
 | 디렉토리 | 설명 |
@@ -97,6 +128,7 @@ export ORACLE_SERVICE_NAME=""       # 서비스명 사용 시 설정
 | `gabia-dev-mcp-gitlab-merge-requests` | GitLab MR 관리 |
 | `gabia-dev-mcp-mattermost` | Mattermost 메시지/채널 관리 |
 | `gabia-dev-mcp-memory` | 메모리 기반 데이터 저장 |
+| `gabia-dev-mcp-mysql` | MySQL DB 쿼리 실행 |
 | `gabia-dev-mcp-oracle` | Oracle DB 쿼리 실행 |
 | `pptx` | PowerPoint 파일 처리 |
 
