@@ -15,3 +15,4 @@
 ## 문서
 
 - [Notes](./note/README.md) - 개발 경험 및 인사이트 기록
+- [Scripts](./scripts/README.md) - 스크립트 사용법 및 설치 안내
