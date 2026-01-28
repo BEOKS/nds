@@ -524,6 +524,214 @@ install_to() {
 }
 
 # ============================================================================
+# Environment variable configuration
+# ============================================================================
+ENV_VARS_ADDED=()
+
+prompt_env_var() {
+    local var_name="$1"
+    local description="$2"
+    local token_url="$3"
+    local is_optional="$4"
+
+    # Check if already set
+    local current_value
+    eval "current_value=\${$var_name:-}"
+
+    if [ -n "$current_value" ]; then
+        success "$var_name is already set"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}▶ $var_name${NC}"
+    echo "  $description"
+    if [ -n "$token_url" ]; then
+        echo -e "  ${DIM}토큰 생성: $token_url${NC}"
+    fi
+
+    local prompt_text="  Enter value"
+    if [ "$is_optional" = "true" ]; then
+        prompt_text="$prompt_text (or press Enter to skip)"
+    fi
+    echo -n "$prompt_text: "
+
+    local value
+    if [ -e /dev/tty ]; then
+        read -r value </dev/tty
+    else
+        read -r value
+    fi
+
+    if [ -z "$value" ]; then
+        if [ "$is_optional" = "true" ]; then
+            warn "Skipped $var_name"
+            return 0
+        else
+            warn "Skipped $var_name (required for this skill)"
+            return 1
+        fi
+    fi
+
+    # Add to shell profile
+    ENV_VARS_ADDED+=("export $var_name=\"$value\"")
+    success "Set $var_name"
+    return 0
+}
+
+configure_environment_variables() {
+    echo ""
+    echo -e "${CYAN}================================${NC}"
+    echo -e "${CYAN}   Environment Variables Setup${NC}"
+    echo -e "${CYAN}================================${NC}"
+    echo ""
+    echo "설치된 스킬에 필요한 환경변수를 설정합니다."
+    echo "사용하지 않는 스킬은 Enter를 눌러 스킵할 수 있습니다."
+    echo ""
+
+    # GitLab Token
+    echo -e "${BOLD}[GitLab - Issues & Merge Requests]${NC}"
+    prompt_env_var "GITLAB_TOKEN" \
+        "GitLab 액세스 토큰 (Issues, MR 스킬에 필요)" \
+        "https://gitlab.gabia.com/-/profile/personal_access_tokens" \
+        "true"
+
+    # Confluence Token
+    echo ""
+    echo -e "${BOLD}[Confluence]${NC}"
+    prompt_env_var "CONFLUENCE_API_TOKEN" \
+        "Confluence API 토큰" \
+        "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" \
+        "true"
+
+    if [ -z "${CONFLUENCE_USERNAME:-}" ]; then
+        prompt_env_var "CONFLUENCE_USERNAME" \
+            "Confluence 사용자명 (API 토큰과 함께 사용)" \
+            "" \
+            "true"
+    fi
+
+    # Mattermost Token
+    echo ""
+    echo -e "${BOLD}[Mattermost]${NC}"
+    prompt_env_var "MATTERMOST_TOKEN" \
+        "Mattermost 액세스 토큰" \
+        "" \
+        "true"
+
+    # Figma Token
+    echo ""
+    echo -e "${BOLD}[Figma]${NC}"
+    prompt_env_var "FIGMA_API_KEY" \
+        "Figma API 키" \
+        "" \
+        "true"
+
+    # Oracle DB
+    echo ""
+    echo -e "${BOLD}[Oracle DB]${NC}"
+    prompt_env_var "ORACLE_HOST" \
+        "Oracle DB 호스트" \
+        "" \
+        "true"
+
+    # Only ask for other Oracle vars if host was provided
+    if printf '%s\n' "${ENV_VARS_ADDED[@]}" | grep -q "ORACLE_HOST"; then
+        prompt_env_var "ORACLE_USERNAME" \
+            "Oracle DB 사용자명" \
+            "" \
+            "true"
+        prompt_env_var "ORACLE_PASSWORD" \
+            "Oracle DB 비밀번호" \
+            "" \
+            "true"
+    fi
+
+    # MySQL DB
+    echo ""
+    echo -e "${BOLD}[MySQL DB]${NC}"
+    prompt_env_var "MYSQL_HOST" \
+        "MySQL DB 호스트 (단일 계정 사용 시)" \
+        "" \
+        "true"
+
+    # Only ask for other MySQL vars if host was provided
+    if printf '%s\n' "${ENV_VARS_ADDED[@]}" | grep -q "MYSQL_HOST"; then
+        prompt_env_var "MYSQL_USERNAME" \
+            "MySQL DB 사용자명" \
+            "" \
+            "true"
+        prompt_env_var "MYSQL_PASSWORD" \
+            "MySQL DB 비밀번호" \
+            "" \
+            "true"
+    fi
+
+    # Save to shell profile if any vars were added
+    if [ ${#ENV_VARS_ADDED[@]} -gt 0 ]; then
+        echo ""
+        echo -e "${CYAN}================================${NC}"
+        save_environment_variables
+    else
+        echo ""
+        info "No environment variables were configured"
+    fi
+}
+
+save_environment_variables() {
+    # Determine shell profile
+    local shell_profile=""
+    if [ -n "${ZSH_VERSION:-}" ] || [ "$SHELL" = "/bin/zsh" ] || [ "$SHELL" = "/usr/bin/zsh" ]; then
+        shell_profile="$HOME/.zshrc"
+    elif [ -n "${BASH_VERSION:-}" ] || [ "$SHELL" = "/bin/bash" ] || [ "$SHELL" = "/usr/bin/bash" ]; then
+        shell_profile="$HOME/.bashrc"
+    else
+        shell_profile="$HOME/.profile"
+    fi
+
+    echo ""
+    echo "환경변수를 저장할 위치를 선택하세요:"
+    echo "  1) $shell_profile (권장)"
+    echo "  2) 화면에 출력만 (직접 복사)"
+    echo "  3) 저장 안 함"
+    echo ""
+    echo -n "선택 (1/2/3): "
+
+    local choice
+    if [ -e /dev/tty ]; then
+        read -r choice </dev/tty
+    else
+        read -r choice
+    fi
+
+    case "$choice" in
+        1)
+            echo "" >> "$shell_profile"
+            echo "# NDS Skills Environment Variables (added by installer)" >> "$shell_profile"
+            for var in "${ENV_VARS_ADDED[@]}"; do
+                echo "$var" >> "$shell_profile"
+            done
+            echo "" >> "$shell_profile"
+            success "환경변수가 $shell_profile 에 저장되었습니다"
+            info "적용하려면 실행: source $shell_profile"
+            ;;
+        2)
+            echo ""
+            echo -e "${CYAN}아래 내용을 쉘 프로필에 추가하세요:${NC}"
+            echo ""
+            echo "# NDS Skills Environment Variables"
+            for var in "${ENV_VARS_ADDED[@]}"; do
+                echo "$var"
+            done
+            echo ""
+            ;;
+        *)
+            info "환경변수 저장을 건너뛰었습니다"
+            ;;
+    esac
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 main() {
@@ -633,13 +841,14 @@ main() {
     success "Installation complete!"
     echo -e "${CYAN}================================${NC}"
     echo ""
-    echo "Next steps:"
-    echo "  1. Configure environment variables for skills that need them"
-    echo "     (See each skill's SKILL.md for required variables)"
-    echo "  2. Restart your coding agent"
+
+    # Configure environment variables
+    configure_environment_variables
+
     echo ""
-    echo "For environment variable setup, see:"
-    echo "  https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/blob/${BRANCH}/skills/README.md"
+    echo "Next steps:"
+    echo "  1. Restart your coding agent"
+    echo "  2. Source your shell profile: source ~/.zshrc (or ~/.bashrc)"
     echo ""
 }
 
