@@ -17,13 +17,13 @@
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://gitlab.gabia.com/gabia/idc/nds/-/raw/main/install.sh | bash
+curl -fsSL https://repo.gabia.com/repository/raw-repository/nds/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://gitlab.gabia.com/gabia/idc/nds/-/raw/main/install.ps1 | iex
+irm https://repo.gabia.com/repository/raw-repository/nds/install.ps1 | iex
 ```
 
 실행하면 TUI 메뉴에서 설치할 코딩 에이전트를 선택할 수 있습니다:
