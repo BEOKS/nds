@@ -19,8 +19,9 @@
 set -e
 
 # ============================================================================
-# Configuration - Update these values for your GitLab instance
+# Configuration
 # ============================================================================
+NEXUS_BASE_URL="${NDS_NEXUS_URL:-https://repo.gabia.com/repository/raw-repository/nds}"
 GITLAB_HOST="${NDS_GITLAB_HOST:-gitlab.gabia.com}"
 GITLAB_PROJECT="${NDS_GITLAB_PROJECT:-gabia/idc/nds}"
 BRANCH="${NDS_BRANCH:-main}"
@@ -419,34 +420,24 @@ download_all_skills() {
     local target_dir="$1"
 
     TEMP_DIR=$(mktemp -d)
-    local archive_file="${TEMP_DIR}/nds.zip"
-    local project_name="${GITLAB_PROJECT##*/}"
+    local archive_file="${TEMP_DIR}/nds-skills.zip"
 
-    # GitLab archive URL
-    local archive_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/archive/${BRANCH}/${project_name}-${BRANCH}.zip"
+    # Nexus archive URL
+    local archive_url="${NEXUS_BASE_URL}/nds-skills.zip"
 
-    info "Downloading skills archive..."
+    info "Downloading skills archive from Nexus..."
 
     if ! curl -fsSL "$archive_url" -o "$archive_file" 2>/dev/null; then
-        # Try tar.gz if zip fails
-        archive_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/archive/${BRANCH}/${project_name}-${BRANCH}.tar.gz"
-        archive_file="${TEMP_DIR}/nds.tar.gz"
-
-        if ! curl -fsSL "$archive_url" -o "$archive_file" 2>/dev/null; then
-            error "Failed to download archive from GitLab"
-            error "URL: $archive_url"
-            error "Check if the repository exists and is accessible"
-            return 1
-        fi
+        error "Failed to download archive from Nexus"
+        error "URL: $archive_url"
+        error "Check if the file exists and is accessible"
+        return 1
     fi
 
     info "Extracting..."
 
-    # Extract based on file type
-    case "$archive_file" in
-        *.zip) unzip -q "$archive_file" -d "$TEMP_DIR" ;;
-        *)     tar -xzf "$archive_file" -C "$TEMP_DIR" ;;
-    esac
+    # Extract zip file
+    unzip -q "$archive_file" -d "$TEMP_DIR"
 
     # Find the skills directory
     local extracted_dir
@@ -560,34 +551,40 @@ main() {
                 exit 0
             fi
         else
-            # No TTY available (piped input), show simple prompt
-            echo "Available coding agents:"
-            echo "  1) Claude Code  (~/.claude/skills)"
-            echo "  2) Cursor       (~/.claude/skills)"
-            echo "  3) Codex CLI    (~/.codex/skills)"
-            echo "  4) Gemini CLI   (~/.gemini/skills)"
-            echo "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
-            echo ""
-            echo "Enter numbers separated by space (e.g., '1 3 4') or 'all':"
-            read -r selection
+            # No TTY available (piped input), try to read from /dev/tty
+            if [ -e /dev/tty ]; then
+                echo "Available coding agents:"
+                echo "  1) Claude Code  (~/.claude/skills)"
+                echo "  2) Cursor       (~/.claude/skills)"
+                echo "  3) Codex CLI    (~/.codex/skills)"
+                echo "  4) Gemini CLI   (~/.gemini/skills)"
+                echo "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
+                echo ""
+                echo -n "Enter numbers separated by space (e.g., '1 3 4') or 'all': "
+                read -r selection </dev/tty
 
-            if [ "$selection" = "all" ]; then
-                SELECTED_AGENTS="claude cursor codex gemini antigravity"
+                if [ "$selection" = "all" ]; then
+                    SELECTED_AGENTS="claude cursor codex gemini antigravity"
+                else
+                    for num in $selection; do
+                        case $num in
+                            1) SELECTED_AGENTS="$SELECTED_AGENTS claude" ;;
+                            2) SELECTED_AGENTS="$SELECTED_AGENTS cursor" ;;
+                            3) SELECTED_AGENTS="$SELECTED_AGENTS codex" ;;
+                            4) SELECTED_AGENTS="$SELECTED_AGENTS gemini" ;;
+                            5) SELECTED_AGENTS="$SELECTED_AGENTS antigravity" ;;
+                        esac
+                    done
+                fi
+
+                if [ -z "$SELECTED_AGENTS" ]; then
+                    warn "No agents selected"
+                    exit 0
+                fi
             else
-                for num in $selection; do
-                    case $num in
-                        1) SELECTED_AGENTS="$SELECTED_AGENTS claude" ;;
-                        2) SELECTED_AGENTS="$SELECTED_AGENTS cursor" ;;
-                        3) SELECTED_AGENTS="$SELECTED_AGENTS codex" ;;
-                        4) SELECTED_AGENTS="$SELECTED_AGENTS gemini" ;;
-                        5) SELECTED_AGENTS="$SELECTED_AGENTS antigravity" ;;
-                    esac
-                done
-            fi
-
-            if [ -z "$SELECTED_AGENTS" ]; then
-                warn "No agents selected"
-                exit 0
+                # No TTY at all, default to all agents
+                info "No interactive terminal available, installing to all agents"
+                SELECTED_AGENTS="claude cursor codex gemini antigravity"
             fi
         fi
     fi
@@ -609,8 +606,7 @@ main() {
     done
 
     echo ""
-    info "GitLab: https://${GITLAB_HOST}/${GITLAB_PROJECT}"
-    info "Branch: ${BRANCH}"
+    info "Source: ${NEXUS_BASE_URL}"
     echo ""
     info "Selected agents:"
     for agent in $SELECTED_AGENTS; do
