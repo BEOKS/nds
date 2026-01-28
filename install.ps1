@@ -57,6 +57,7 @@ param(
 # ============================================================================
 # Configuration
 # ============================================================================
+$NexusBaseUrl = if ($env:NDS_NEXUS_URL) { $env:NDS_NEXUS_URL } else { "https://repo.gabia.com/repository/raw-repository/nds" }
 $GitLabHost = if ($env:NDS_GITLAB_HOST) { $env:NDS_GITLAB_HOST } else { "gitlab.gabia.com" }
 $GitLabProject = if ($env:NDS_GITLAB_PROJECT) { $env:NDS_GITLAB_PROJECT } else { "gabia/idc/nds" }
 $Branch = if ($env:NDS_BRANCH) { $env:NDS_BRANCH } else { "main" }
@@ -406,17 +407,16 @@ function Install-Skills {
     try {
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
-        $projectName = $GitLabProject.Split('/')[-1]
-        $archiveUrl = "https://$GitLabHost/$GitLabProject/-/archive/$Branch/$projectName-$Branch.zip"
-        $archiveFile = Join-Path $tempDir "nds.zip"
+        $archiveUrl = "$NexusBaseUrl/nds-skills.zip"
+        $archiveFile = Join-Path $tempDir "nds-skills.zip"
 
-        Write-Info "Downloading skills archive..."
+        Write-Info "Downloading skills archive from Nexus..."
 
         try {
             Invoke-WebRequest -Uri $archiveUrl -OutFile $archiveFile -ErrorAction Stop
         }
         catch {
-            Write-Err "Failed to download archive from GitLab"
+            Write-Err "Failed to download archive from Nexus"
             Write-Err "URL: $archiveUrl"
             return $false
         }
@@ -516,6 +516,183 @@ function Install-SkillsTo {
 }
 
 # ============================================================================
+# Environment variable configuration
+# ============================================================================
+$script:EnvVarsAdded = @{}
+
+function Prompt-EnvVar {
+    param(
+        [string]$VarName,
+        [string]$Description,
+        [string]$TokenUrl = "",
+        [bool]$IsOptional = $true
+    )
+
+    # Check if already set
+    $currentValue = [Environment]::GetEnvironmentVariable($VarName, "User")
+
+    if ($currentValue) {
+        Write-Success "$VarName is already set"
+        return $true
+    }
+
+    Write-Host ""
+    Write-Host "* $VarName" -ForegroundColor Yellow
+    Write-Host "  $Description"
+    if ($TokenUrl) {
+        Write-Host "  토큰 생성: $TokenUrl" -ForegroundColor DarkGray
+    }
+
+    $promptText = "  Enter value"
+    if ($IsOptional) {
+        $promptText += " (or press Enter to skip)"
+    }
+
+    $value = Read-Host $promptText
+
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        if ($IsOptional) {
+            Write-Warn "Skipped $VarName"
+            return $true
+        }
+        else {
+            Write-Warn "Skipped $VarName (required for this skill)"
+            return $false
+        }
+    }
+
+    $script:EnvVarsAdded[$VarName] = $value
+    Write-Success "Set $VarName"
+    return $true
+}
+
+function Configure-EnvironmentVariables {
+    Write-Host ""
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host "   Environment Variables Setup" -ForegroundColor Cyan
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "설치된 스킬에 필요한 환경변수를 설정합니다."
+    Write-Host "사용하지 않는 스킬은 Enter를 눌러 스킵할 수 있습니다."
+    Write-Host ""
+
+    # GitLab Token
+    Write-Host "[GitLab - Issues & Merge Requests]" -ForegroundColor White
+    Prompt-EnvVar -VarName "GITLAB_TOKEN" `
+        -Description "GitLab 액세스 토큰 (Issues, MR 스킬에 필요)" `
+        -TokenUrl "https://gitlab.gabia.com/-/profile/personal_access_tokens" `
+        -IsOptional $true
+
+    # Confluence Token
+    Write-Host ""
+    Write-Host "[Confluence]" -ForegroundColor White
+    Prompt-EnvVar -VarName "CONFLUENCE_API_TOKEN" `
+        -Description "Confluence API 토큰" `
+        -TokenUrl "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" `
+        -IsOptional $true
+
+    $confToken = [Environment]::GetEnvironmentVariable("CONFLUENCE_USERNAME", "User")
+    if (-not $confToken) {
+        Prompt-EnvVar -VarName "CONFLUENCE_USERNAME" `
+            -Description "Confluence 사용자명 (API 토큰과 함께 사용)" `
+            -IsOptional $true
+    }
+
+    # Mattermost Token
+    Write-Host ""
+    Write-Host "[Mattermost]" -ForegroundColor White
+    Prompt-EnvVar -VarName "MATTERMOST_TOKEN" `
+        -Description "Mattermost 액세스 토큰" `
+        -IsOptional $true
+
+    # Figma Token
+    Write-Host ""
+    Write-Host "[Figma]" -ForegroundColor White
+    Prompt-EnvVar -VarName "FIGMA_API_KEY" `
+        -Description "Figma API 키" `
+        -IsOptional $true
+
+    # Oracle DB
+    Write-Host ""
+    Write-Host "[Oracle DB]" -ForegroundColor White
+    Prompt-EnvVar -VarName "ORACLE_HOST" `
+        -Description "Oracle DB 호스트" `
+        -IsOptional $true
+
+    # Only ask for other Oracle vars if host was provided
+    if ($script:EnvVarsAdded.ContainsKey("ORACLE_HOST")) {
+        Prompt-EnvVar -VarName "ORACLE_USERNAME" `
+            -Description "Oracle DB 사용자명" `
+            -IsOptional $true
+        Prompt-EnvVar -VarName "ORACLE_PASSWORD" `
+            -Description "Oracle DB 비밀번호" `
+            -IsOptional $true
+    }
+
+    # MySQL DB
+    Write-Host ""
+    Write-Host "[MySQL DB]" -ForegroundColor White
+    Prompt-EnvVar -VarName "MYSQL_HOST" `
+        -Description "MySQL DB 호스트 (단일 계정 사용 시)" `
+        -IsOptional $true
+
+    # Only ask for other MySQL vars if host was provided
+    if ($script:EnvVarsAdded.ContainsKey("MYSQL_HOST")) {
+        Prompt-EnvVar -VarName "MYSQL_USERNAME" `
+            -Description "MySQL DB 사용자명" `
+            -IsOptional $true
+        Prompt-EnvVar -VarName "MYSQL_PASSWORD" `
+            -Description "MySQL DB 비밀번호" `
+            -IsOptional $true
+    }
+
+    # Save environment variables if any were added
+    if ($script:EnvVarsAdded.Count -gt 0) {
+        Write-Host ""
+        Write-Host "================================" -ForegroundColor Cyan
+        Save-EnvironmentVariables
+    }
+    else {
+        Write-Host ""
+        Write-Info "No environment variables were configured"
+    }
+}
+
+function Save-EnvironmentVariables {
+    Write-Host ""
+    Write-Host "환경변수를 저장할 위치를 선택하세요:"
+    Write-Host "  1) 사용자 환경변수로 저장 (권장)"
+    Write-Host "  2) 화면에 출력만 (직접 복사)"
+    Write-Host "  3) 저장 안 함"
+    Write-Host ""
+
+    $choice = Read-Host "선택 (1/2/3)"
+
+    switch ($choice) {
+        "1" {
+            foreach ($key in $script:EnvVarsAdded.Keys) {
+                [Environment]::SetEnvironmentVariable($key, $script:EnvVarsAdded[$key], "User")
+            }
+            Write-Success "환경변수가 사용자 환경변수로 저장되었습니다"
+            Write-Info "새 PowerShell 창을 열면 적용됩니다"
+        }
+        "2" {
+            Write-Host ""
+            Write-Host "아래 내용을 PowerShell 프로필에 추가하세요:" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "# NDS Skills Environment Variables"
+            foreach ($key in $script:EnvVarsAdded.Keys) {
+                Write-Host "`$env:$key = `"$($script:EnvVarsAdded[$key])`""
+            }
+            Write-Host ""
+        }
+        default {
+            Write-Info "환경변수 저장을 건너뛰었습니다"
+        }
+    }
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 function Main {
@@ -581,8 +758,7 @@ function Main {
         }
     }
 
-    Write-Info "GitLab: https://$GitLabHost/$GitLabProject"
-    Write-Info "Branch: $Branch"
+    Write-Info "Source: $NexusBaseUrl"
     Write-Host ""
     Write-Info "Selected agents:"
     foreach ($agent in $SelectedAgents) {
@@ -611,13 +787,14 @@ function Main {
     Write-Success "Installation complete!"
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Next steps:"
-    Write-Host "  1. Configure environment variables for skills that need them"
-    Write-Host "     (See each skill's SKILL.md for required variables)"
-    Write-Host "  2. Restart your coding agent"
+
+    # Configure environment variables
+    Configure-EnvironmentVariables
+
     Write-Host ""
-    Write-Host "For environment variable setup, see:"
-    Write-Host "  https://$GitLabHost/$GitLabProject/-/blob/$Branch/skills/README.md"
+    Write-Host "Next steps:"
+    Write-Host "  1. Restart your coding agent"
+    Write-Host "  2. Restart PowerShell to apply environment variables"
     Write-Host ""
 }
 
