@@ -11,6 +11,7 @@
 #   curl ... | bash -s -- --codex            # Install to Codex only
 #   curl ... | bash -s -- --gemini           # Install to Gemini CLI only
 #   curl ... | bash -s -- --antigravity      # Install to Antigravity only
+#   curl ... | bash -s -- --copilot          # Install to GitHub Copilot only
 #   curl ... | bash -s -- --all              # Install to all agents
 #   curl ... | bash -s -- --skills "a,b,c"   # Install specific skills only
 #   curl ... | bash -s -- --list             # List available skills
@@ -46,7 +47,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 # ============================================================================
 # Agent configurations (compatible with bash 3.2)
 # ============================================================================
-AGENT_KEYS="claude cursor codex gemini antigravity"
+AGENT_KEYS="claude cursor codex gemini antigravity copilot"
 
 get_agent_path() {
     case "$1" in
@@ -55,6 +56,7 @@ get_agent_path() {
         codex)       echo "$HOME/.codex/skills" ;;
         gemini)      echo "$HOME/.gemini/skills" ;;
         antigravity) echo "$HOME/.gemini/antigravity/global_skills" ;;
+        copilot)     echo "$HOME/.claude/skills" ;;
     esac
 }
 
@@ -65,6 +67,7 @@ get_agent_name() {
         codex)       echo "Codex CLI" ;;
         gemini)      echo "Gemini CLI" ;;
         antigravity) echo "Antigravity" ;;
+        copilot)     echo "GitHub Copilot" ;;
     esac
 }
 
@@ -120,8 +123,13 @@ while [ $# -gt 0 ]; do
             INTERACTIVE=false
             shift
             ;;
+        --copilot)
+            SELECTED_AGENTS="$SELECTED_AGENTS copilot"
+            INTERACTIVE=false
+            shift
+            ;;
         --all)
-            SELECTED_AGENTS="claude cursor codex gemini antigravity"
+            SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
             INTERACTIVE=false
             shift
             ;;
@@ -156,6 +164,7 @@ Options:
   --codex            Install to Codex CLI (~/.codex/skills)
   --gemini           Install to Gemini CLI (~/.gemini/skills)
   --antigravity      Install to Antigravity (~/.gemini/antigravity/global_skills)
+  --copilot          Install to GitHub Copilot (~/.claude/skills)
   --all              Install to all agents
   --list             List available skills and exit
   --skills "a,b,c"   Install only specified skills (comma-separated)
@@ -215,7 +224,7 @@ check_requirements() {
 # ============================================================================
 show_multiselect_menu() {
     local cursor=0
-    local num_options=5
+    local num_options=6
 
     # Selection states (0=unselected, 1=selected)
     local sel_claude=0
@@ -223,6 +232,7 @@ show_multiselect_menu() {
     local sel_codex=0
     local sel_gemini=0
     local sel_antigravity=0
+    local sel_copilot=0
 
     # Hide cursor and disable echo
     tput civis 2>/dev/null || true
@@ -243,7 +253,7 @@ show_multiselect_menu() {
 
         # Display options
         local i=0
-        for agent in claude cursor codex gemini antigravity; do
+        for agent in claude cursor codex gemini antigravity copilot; do
             local name=$(get_agent_name "$agent")
             local path=$(get_agent_path "$agent")
             local prefix="  "
@@ -263,6 +273,7 @@ show_multiselect_menu() {
                 codex)       is_selected=$sel_codex ;;
                 gemini)      is_selected=$sel_gemini ;;
                 antigravity) is_selected=$sel_antigravity ;;
+                copilot)     is_selected=$sel_copilot ;;
             esac
 
             if [ $is_selected -eq 1 ]; then
@@ -302,13 +313,14 @@ show_multiselect_menu() {
                     2) sel_codex=$((1 - sel_codex)) ;;
                     3) sel_gemini=$((1 - sel_gemini)) ;;
                     4) sel_antigravity=$((1 - sel_antigravity)) ;;
+                    5) sel_copilot=$((1 - sel_copilot)) ;;
                 esac
                 ;;
             'a'|'A')  # Select all
-                sel_claude=1; sel_cursor=1; sel_codex=1; sel_gemini=1; sel_antigravity=1
+                sel_claude=1; sel_cursor=1; sel_codex=1; sel_gemini=1; sel_antigravity=1; sel_copilot=1
                 ;;
             'n'|'N')  # Select none
-                sel_claude=0; sel_cursor=0; sel_codex=0; sel_gemini=0; sel_antigravity=0
+                sel_claude=0; sel_cursor=0; sel_codex=0; sel_gemini=0; sel_antigravity=0; sel_copilot=0
                 ;;
             'q'|'Q')  # Quit
                 tput cnorm 2>/dev/null || true
@@ -343,6 +355,7 @@ show_multiselect_menu() {
     [ $sel_codex -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS codex"
     [ $sel_gemini -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS gemini"
     [ $sel_antigravity -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS antigravity"
+    [ $sel_copilot -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS copilot"
 }
 
 # ============================================================================
@@ -767,12 +780,13 @@ main() {
                 echo "  3) Codex CLI    (~/.codex/skills)"
                 echo "  4) Gemini CLI   (~/.gemini/skills)"
                 echo "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
+                echo "  6) Copilot      (~/.claude/skills)"
                 echo ""
                 echo -n "Enter numbers separated by space (e.g., '1 3 4') or 'all': "
                 read -r selection </dev/tty
 
                 if [ "$selection" = "all" ]; then
-                    SELECTED_AGENTS="claude cursor codex gemini antigravity"
+                    SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
                 else
                     for num in $selection; do
                         case $num in
@@ -781,6 +795,7 @@ main() {
                             3) SELECTED_AGENTS="$SELECTED_AGENTS codex" ;;
                             4) SELECTED_AGENTS="$SELECTED_AGENTS gemini" ;;
                             5) SELECTED_AGENTS="$SELECTED_AGENTS antigravity" ;;
+                            6) SELECTED_AGENTS="$SELECTED_AGENTS copilot" ;;
                         esac
                     done
                 fi
@@ -792,14 +807,14 @@ main() {
             else
                 # No TTY at all, default to all agents
                 info "No interactive terminal available, installing to all agents"
-                SELECTED_AGENTS="claude cursor codex gemini antigravity"
+                SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
             fi
         fi
     fi
 
     # Default to all if still no agents selected
     if [ -z "$SELECTED_AGENTS" ]; then
-        SELECTED_AGENTS="claude cursor codex gemini antigravity"
+        SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
     fi
 
     # Remove duplicates (claude and cursor share the same path)
