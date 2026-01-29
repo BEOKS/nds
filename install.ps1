@@ -21,6 +21,9 @@
 .PARAMETER Antigravity
     Install to Antigravity (~/.gemini/antigravity/global_skills)
 
+.PARAMETER Copilot
+    Install to GitHub Copilot (~/.claude/skills)
+
 .PARAMETER All
     Install to all agents
 
@@ -48,6 +51,7 @@ param(
     [switch]$Codex,
     [switch]$Gemini,
     [switch]$Antigravity,
+    [switch]$Copilot,
     [switch]$All,
     [switch]$List,
     [string]$Skills,
@@ -86,9 +90,13 @@ $AgentConfig = @{
         Name = "Antigravity"
         Path = Join-Path $env:USERPROFILE ".gemini\antigravity\global_skills"
     }
+    "copilot" = @{
+        Name = "GitHub Copilot"
+        Path = Join-Path $env:USERPROFILE ".claude\skills"
+    }
 }
 
-$AgentOrder = @("claude", "cursor", "codex", "gemini", "antigravity")
+$AgentOrder = @("claude", "cursor", "codex", "gemini", "antigravity", "copilot")
 
 # ============================================================================
 # Logging functions
@@ -140,6 +148,7 @@ Agent Paths:
     Codex CLI     ~/.codex/skills
     Gemini CLI    ~/.gemini/skills
     Antigravity   ~/.gemini/antigravity/global_skills
+    Copilot       ~/.claude/skills
 
 Examples:
     # Interactive mode
@@ -184,6 +193,7 @@ if ($Cursor) { $SelectedAgents += "cursor" }
 if ($Codex) { $SelectedAgents += "codex" }
 if ($Gemini) { $SelectedAgents += "gemini" }
 if ($Antigravity) { $SelectedAgents += "antigravity" }
+if ($Copilot) { $SelectedAgents += "copilot" }
 if ($All) { $SelectedAgents = $AgentOrder.Clone() }
 
 if ($env:NDS_SKILLS -and -not $Skills) {
@@ -721,6 +731,7 @@ function Main {
             Write-Host "  3) Codex CLI    (~/.codex/skills)"
             Write-Host "  4) Gemini CLI   (~/.gemini/skills)"
             Write-Host "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
+            Write-Host "  6) Copilot      (~/.claude/skills)"
             Write-Host ""
             $selection = Read-Host "Enter numbers separated by space (e.g., '1 3 4') or 'all'"
 
@@ -736,6 +747,7 @@ function Main {
                         "3" { $SelectedAgents += "codex" }
                         "4" { $SelectedAgents += "gemini" }
                         "5" { $SelectedAgents += "antigravity" }
+                        "6" { $SelectedAgents += "copilot" }
                     }
                 }
             }
