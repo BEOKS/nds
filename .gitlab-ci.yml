@@ -1,0 +1,58 @@
+# OpenWork 자동 업데이트 배포(GitLab CI 템플릿)
+#
+# 목적:
+# - macOS/Windows에서 OpenWork(Tauri) 릴리스를 빌드하고
+# - Tauri Updater 산출물(latest.json + update bundle)을 Nexus(raw-repository)에 업로드합니다.
+#
+# 주의:
+# - macOS/Windows 러너가 동시에 존재하는 경우, 운영 환경에 맞게 tags를 지정하는 것이 안전합니다.
+# - createUpdaterArtifacts=true 빌드는 서명 키가 필요합니다(TAURI_PRIVATE_KEY / TAURI_KEY_PASSWORD).
+#
+# 사용 방법:
+# 1) 이 파일 내용을 레포 루트의 `.gitlab-ci.yml`로 복사
+# 2) GitLab CI variables 설정(Protected/Masked 권장)
+#    - NDS_NEXUS_URL=https://repo.gabia.com/repository/raw-repository/nds   (선택)
+#    - NDS_NEXUS_USERNAME=...
+#    - NDS_NEXUS_PASSWORD=...
+#    - OPENWORK_UPDATER_PUBKEY=... (공개키)
+#    - TAURI_PRIVATE_KEY=... (개인키)
+#    - TAURI_KEY_PASSWORD=... (개인키 패스워드)
+#
+# 3) tag(예: v1.2.3) 푸시 → macOS/Windows job 실행 → Nexus에 업로드
+
+stages:
+  - release
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - when: never
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+openwork:release:macos:
+  stage: release
+  # 필요 시 태그 지정(예: macos)
+  # tags: ["macos"]
+  script:
+    - set -euo pipefail
+    - export NDS_NEXUS_URL="${NDS_NEXUS_URL:-https://repo.gabia.com/repository/raw-repository/nds}"
+    - export OPENWORK_UPDATER_BASE_URL="${NDS_NEXUS_URL%/}/openwork-updater"
+    - ./scripts/build-openwork-installer.sh --with-updater-artifacts --dmg-skip-jenkins --updater-base-url "$OPENWORK_UPDATER_BASE_URL" --updater-pubkey "$OPENWORK_UPDATER_PUBKEY"
+    - arch="$(uname -m)"
+    - if [[ "$arch" == "arm64" ]]; then target="aarch64-apple-darwin"; else target="x86_64-apple-darwin"; fi
+    - bundle_dir="./openwork/packages/desktop/src-tauri/target/$target/release/bundle"
+    - node ./scripts/publish-openwork-updater.node.js --bundle-dir "$bundle_dir"
+
+openwork:release:windows:
+  stage: release
+  # 필요 시 태그 지정(예: windows)
+  # tags: ["windows"]
+  script:
+    - $env:NDS_NEXUS_URL = if ($env:NDS_NEXUS_URL) { $env:NDS_NEXUS_URL } else { "https://repo.gabia.com/repository/raw-repository/nds" }
+    - $env:OPENWORK_UPDATER_BASE_URL = "$($env:NDS_NEXUS_URL.TrimEnd('/'))/openwork-updater"
+    - powershell -ExecutionPolicy Bypass -File .\scripts\build-openwork-installer.ps1 -WithUpdaterArtifacts -UpdaterBaseUrl $env:OPENWORK_UPDATER_BASE_URL -UpdaterPubkey $env:OPENWORK_UPDATER_PUBKEY
+    - $target = "x86_64-pc-windows-msvc"
+    - $bundleDir = ".\openwork\packages\desktop\src-tauri\target\$target\release\bundle"
+    - node .\scripts\publish-openwork-updater.node.js --bundle-dir $bundleDir
