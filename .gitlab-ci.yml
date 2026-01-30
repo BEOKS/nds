@@ -29,7 +29,7 @@ workflow:
     - when: never
 
 variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_STRATEGY: normal
 
 openwork:release:macos:
   stage: release
