@@ -1,0 +1,6 @@
+[submodule "openwork"]
+	path = openwork
+	url = https://github.com/different-ai/openwork.git
+[submodule "opencode"]
+	path = opencode
+	url = https://github.com/anomalyco/opencode.git
