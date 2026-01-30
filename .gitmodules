@@ -1,6 +1,6 @@
 [submodule "openwork"]
 	path = openwork
-	url = https://gitlab.gabia.com/gabia/idc/gabiawork.git
+	url = ../gabiawork.git
 [submodule "opencode"]
 	path = opencode
-	url = https://gitlab.gabia.com/gabia/idc/gabiacode.git
+	url = ../gabiacode.git
