@@ -25,6 +25,11 @@ usage() {
   --opencode-bin <path>      opencode 바이너리 경로를 직접 지정(이 경우 opencode 빌드를 건너뜀)
   --dmg-skip-jenkins         DMG 생성 시 Finder/AppleScript 단계를 건너뜀(헤드리스/권한 제한 환경용)
   --with-updater-artifacts   createUpdaterArtifacts=true 유지(기본은 false로 덮어써 빌드)
+  --updater-base-url <url>   OpenWork Updater latest.json 호스팅 base URL
+                             예) https://repo.gabia.com/repository/raw-repository/nds/openwork-updater
+                             설정 시 endpoints는 <base>/{{target}}/latest.json 으로 주입됩니다.
+  --updater-pubkey <string>  Updater 서명 검증용 pubkey(공개키) 주입(1줄 문자열)
+  --updater-pubkey-file <p>  pubkey를 파일에서 읽어 주입
   --no-frozen-lockfile       pnpm install 시 --frozen-lockfile 미사용
   -h, --help                 도움말 표시
 
@@ -60,6 +65,9 @@ OPENCODE_BIN=""
 DMG_SKIP_JENKINS=false
 WITH_UPDATER_ARTIFACTS=false
 FROZEN_LOCKFILE=true
+UPDATER_BASE_URL="${OPENWORK_UPDATER_BASE_URL:-}"
+UPDATER_PUBKEY="${OPENWORK_UPDATER_PUBKEY:-}"
+UPDATER_PUBKEY_FILE="${OPENWORK_UPDATER_PUBKEY_FILE:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -87,6 +95,18 @@ while [[ $# -gt 0 ]]; do
       WITH_UPDATER_ARTIFACTS=true
       shift
       ;;
+    --updater-base-url)
+      UPDATER_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --updater-pubkey)
+      UPDATER_PUBKEY="${2:-}"
+      shift 2
+      ;;
+    --updater-pubkey-file)
+      UPDATER_PUBKEY_FILE="${2:-}"
+      shift 2
+      ;;
     --no-frozen-lockfile)
       FROZEN_LOCKFILE=false
       shift
@@ -106,6 +126,24 @@ done
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo -e "${RED}오류: 이 스크립트는 macOS에서만 실행 가능합니다.${NC}"
   exit 1
+fi
+
+if [[ -n "$UPDATER_PUBKEY_FILE" ]]; then
+  if [[ ! -f "$UPDATER_PUBKEY_FILE" ]]; then
+    echo -e "${RED}오류: updater pubkey 파일을 찾을 수 없습니다: $UPDATER_PUBKEY_FILE${NC}"
+    exit 1
+  fi
+  UPDATER_PUBKEY="$(cat "$UPDATER_PUBKEY_FILE")"
+fi
+
+if [[ -n "$UPDATER_BASE_URL" ]]; then
+  # trailing slash 제거
+  UPDATER_BASE_URL="${UPDATER_BASE_URL%/}"
+fi
+
+if [[ -n "$UPDATER_PUBKEY" ]]; then
+  # 개행 제거(키는 1줄 문자열로 기대)
+  UPDATER_PUBKEY="$(printf '%s' "$UPDATER_PUBKEY" | tr -d '\r\n')"
 fi
 
 bundles_include() {
@@ -220,12 +258,35 @@ fi
 
 tauri_conf_path="$OPENWORK_TAURI_CONF"
 temp_conf=""
-if [[ "$WITH_UPDATER_ARTIFACTS" = false ]]; then
-  temp_conf="$(mktemp "${TMPDIR:-/tmp}/openwork-tauri-conf.XXXXXX")"
-  node -e "const fs=require('fs');const src=process.argv[1];const dst=process.argv[2];const c=JSON.parse(fs.readFileSync(src,'utf8'));c.bundle={...(c.bundle||{}),createUpdaterArtifacts:false};fs.writeFileSync(dst,JSON.stringify(c,null,2));" \
-    "$OPENWORK_TAURI_CONF" "$temp_conf"
-  tauri_conf_path="$temp_conf"
-fi
+temp_conf="$(mktemp "${TMPDIR:-/tmp}/openwork-tauri-conf.XXXXXX")"
+node -e '
+  const fs = require("fs");
+  const src = process.argv[1];
+  const dst = process.argv[2];
+  const createUpdaterArtifacts = process.argv[3] === "true";
+  const updaterBaseUrl = process.argv[4] || "";
+  const updaterPubkey = process.argv[5] || "";
+
+  const c = JSON.parse(fs.readFileSync(src, "utf8"));
+
+  c.bundle = { ...(c.bundle || {}), createUpdaterArtifacts };
+
+  if (updaterBaseUrl) {
+    c.plugins = c.plugins || {};
+    c.plugins.updater = c.plugins.updater || {};
+    c.plugins.updater.active = true;
+    c.plugins.updater.endpoints = [`${updaterBaseUrl}/{{target}}/latest.json`];
+  }
+
+  if (updaterPubkey) {
+    c.plugins = c.plugins || {};
+    c.plugins.updater = c.plugins.updater || {};
+    c.plugins.updater.pubkey = updaterPubkey;
+  }
+
+  fs.writeFileSync(dst, JSON.stringify(c, null, 2));
+' "$OPENWORK_TAURI_CONF" "$temp_conf" "$WITH_UPDATER_ARTIFACTS" "$UPDATER_BASE_URL" "$UPDATER_PUBKEY"
+tauri_conf_path="$temp_conf"
 
 build_bundles="$BUNDLES"
 if bundles_include "$build_bundles" "dmg"; then
