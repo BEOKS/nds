@@ -13,6 +13,9 @@ param(
   [switch]$Baseline,
   [string]$OpencodeBin = "",
   [switch]$WithUpdaterArtifacts,
+  [string]$UpdaterBaseUrl = "",
+  [string]$UpdaterPubkey = "",
+  [string]$UpdaterPubkeyFile = "",
   [switch]$NoFrozenLockfile
 )
 
@@ -65,6 +68,32 @@ Need-Cmd bun
 Need-Cmd pnpm
 Need-Cmd node
 Need-Cmd cargo
+
+if ([string]::IsNullOrWhiteSpace($UpdaterBaseUrl) -and $env:OPENWORK_UPDATER_BASE_URL) {
+  $UpdaterBaseUrl = $env:OPENWORK_UPDATER_BASE_URL
+}
+if ([string]::IsNullOrWhiteSpace($UpdaterPubkey) -and $env:OPENWORK_UPDATER_PUBKEY) {
+  $UpdaterPubkey = $env:OPENWORK_UPDATER_PUBKEY
+}
+if ([string]::IsNullOrWhiteSpace($UpdaterPubkeyFile) -and $env:OPENWORK_UPDATER_PUBKEY_FILE) {
+  $UpdaterPubkeyFile = $env:OPENWORK_UPDATER_PUBKEY_FILE
+}
+
+if (-not [string]::IsNullOrWhiteSpace($UpdaterBaseUrl)) {
+  $UpdaterBaseUrl = $UpdaterBaseUrl.TrimEnd("/")
+}
+
+if (-not [string]::IsNullOrWhiteSpace($UpdaterPubkeyFile)) {
+  if (-not (Test-Path $UpdaterPubkeyFile)) {
+    Die "updater pubkey 파일을 찾을 수 없습니다: $UpdaterPubkeyFile"
+  }
+  $UpdaterPubkey = (Get-Content -Raw $UpdaterPubkeyFile)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($UpdaterPubkey)) {
+  # 개행 제거(키는 1줄 문자열로 기대)
+  $UpdaterPubkey = ($UpdaterPubkey -replace "`r", "" -replace "`n", "")
+}
 
 if ([string]::IsNullOrWhiteSpace($OpencodeBin)) {
   if ($Target -ne $hostTarget) {
@@ -126,17 +155,38 @@ if (-not (Test-Path $openworkTauriConf)) {
 }
 
 $tauriConfPath = $openworkTauriConf
-$tempConf = $null
-if (-not $WithUpdaterArtifacts) {
-  $tempConf = Join-Path ([System.IO.Path]::GetTempPath()) ("openwork-tauri-conf-" + [Guid]::NewGuid().ToString() + ".json")
-  $config = Get-Content -Raw $openworkTauriConf | ConvertFrom-Json
-  if (-not $config.bundle) {
-    $config | Add-Member -NotePropertyName bundle -NotePropertyValue (@{})
-  }
-  $config.bundle.createUpdaterArtifacts = $false
-  $config | ConvertTo-Json -Depth 100 | Set-Content -Path $tempConf -Encoding UTF8
-  $tauriConfPath = $tempConf
+$tempConf = Join-Path ([System.IO.Path]::GetTempPath()) ("openwork-tauri-conf-" + [Guid]::NewGuid().ToString() + ".json")
+$config = Get-Content -Raw $openworkTauriConf | ConvertFrom-Json
+
+if (-not $config.bundle) {
+  $config | Add-Member -NotePropertyName bundle -NotePropertyValue ([pscustomobject]@{})
 }
+$config.bundle.createUpdaterArtifacts = [bool]$WithUpdaterArtifacts
+
+if (-not [string]::IsNullOrWhiteSpace($UpdaterBaseUrl)) {
+  if (-not $config.plugins) {
+    $config | Add-Member -NotePropertyName plugins -NotePropertyValue ([pscustomobject]@{})
+  }
+  if (-not $config.plugins.updater) {
+    $config.plugins | Add-Member -NotePropertyName updater -NotePropertyValue ([pscustomobject]@{})
+  }
+
+  $config.plugins.updater.active = $true
+  $config.plugins.updater.endpoints = @("$UpdaterBaseUrl/{{target}}/latest.json")
+}
+
+if (-not [string]::IsNullOrWhiteSpace($UpdaterPubkey)) {
+  if (-not $config.plugins) {
+    $config | Add-Member -NotePropertyName plugins -NotePropertyValue ([pscustomobject]@{})
+  }
+  if (-not $config.plugins.updater) {
+    $config.plugins | Add-Member -NotePropertyName updater -NotePropertyValue ([pscustomobject]@{})
+  }
+  $config.plugins.updater.pubkey = $UpdaterPubkey
+}
+
+$config | ConvertTo-Json -Depth 100 | Set-Content -Path $tempConf -Encoding UTF8
+$tauriConfPath = $tempConf
 
 Push-Location $openworkDir
 if ($NoFrozenLockfile) {
@@ -167,4 +217,3 @@ if (Test-Path $bundleDir) {
 else {
   Write-Host "경고: 번들 디렉토리를 찾지 못했습니다: $bundleDir" -ForegroundColor Yellow
 }
-
