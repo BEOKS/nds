@@ -172,38 +172,12 @@ def _http_json(
 # ---------------------------------------------------------------------------
 
 def _parse_time_range(time_from: str, time_to: str) -> tuple[str, str]:
-    """Kibana 스타일 시간 표현식을 ISO 포맷으로 변환.
+    """Kibana 스타일 시간 표현식을 반환.
 
-    지원 형식:
-      - 'now', 'now-1h', 'now-25h', 'now-7d', 'now-30m'
-      - ISO 8601 문자열 (그대로 반환)
+    Elasticsearch는 'now', 'now-1h' 등의 date math 표현식을 직접 지원하므로
+    가능한 한 그대로 전달한다. ISO 8601 문자열도 그대로 반환.
     """
-    now = datetime.now(timezone.utc)
-
-    def _resolve(expr: str) -> str:
-        expr = expr.strip()
-        if expr == "now":
-            return now.isoformat()
-
-        m = re.match(r"^now-(\d+)([smhdwM])$", expr)
-        if m:
-            val = int(m.group(1))
-            unit = m.group(2)
-            delta_map = {
-                "s": timedelta(seconds=val),
-                "m": timedelta(minutes=val),
-                "h": timedelta(hours=val),
-                "d": timedelta(days=val),
-                "w": timedelta(weeks=val),
-                "M": timedelta(days=val * 30),
-            }
-            delta = delta_map.get(unit, timedelta(hours=val))
-            return (now - delta).isoformat()
-
-        # ISO 포맷이면 그대로 반환
-        return expr
-
-    return _resolve(time_from), _resolve(time_to)
+    return time_from.strip(), time_to.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +268,9 @@ def _build_es_query(
 
     must_clauses = []
 
+    # text 타입 필드 목록 - wildcard 시 .keyword 대신 query_string 사용
+    _text_fields = {"message", "log", "error", "stack_trace", "exception"}
+
     # 간단한 KQL 파서: field : "value" 또는 field : value
     parts = re.split(r"\s+(?:AND|and)\s+", kql.strip())
 
@@ -307,8 +284,12 @@ def _build_es_query(
         if m:
             field, value = m.group(1), m.group(2)
             if "*" in value:
-                # wildcard 쿼리는 keyword 서브필드 사용
-                must_clauses.append({"wildcard": {f"{field}.keyword": {"value": value}}})
+                bare = value.strip("*")
+                if field in _text_fields or "." not in field:
+                    # text 필드: match_phrase가 가장 빠르고 정확함
+                    must_clauses.append({"match_phrase": {field: bare}})
+                else:
+                    must_clauses.append({"wildcard": {f"{field}.keyword": {"value": value}}})
             else:
                 must_clauses.append({"match_phrase": {field: value}})
             continue
@@ -318,7 +299,11 @@ def _build_es_query(
         if m:
             field, value = m.group(1), m.group(2)
             if "*" in value:
-                must_clauses.append({"wildcard": {f"{field}.keyword": {"value": value}}})
+                bare = value.strip("*")
+                if field in _text_fields or "." not in field:
+                    must_clauses.append({"match_phrase": {field: bare}})
+                else:
+                    must_clauses.append({"wildcard": {f"{field}.keyword": {"value": value}}})
             else:
                 must_clauses.append({"match_phrase": {field: value}})
             continue
