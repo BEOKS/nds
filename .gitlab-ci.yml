@@ -50,5 +50,5 @@ deploy:skills:
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file nds-skills.zip "${NDS_NEXUS_URL}/nds-skills.zip"
 
     - echo "=== Deploy complete ==="
-    - echo "macOS/Linux: curl -fsSL ${NDS_NEXUS_URL}/install.sh | bash"
-    - echo "Windows:     irm ${NDS_NEXUS_URL}/install.ps1 | iex"
+    - 'echo "macOS/Linux: curl -fsSL ${NDS_NEXUS_URL}/install.sh | bash"'
+    - 'echo "Windows:     irm ${NDS_NEXUS_URL}/install.ps1 | iex"'
