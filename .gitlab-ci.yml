@@ -31,8 +31,10 @@ deploy:skills:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
       allow_failure: true
+  image: alpine:latest
   script:
     - set -euo pipefail
+    - apk add --no-cache zip curl
 
     # skills 디렉토리를 zip으로 패키징
     - echo "=== Packaging nds-skills.zip ==="
