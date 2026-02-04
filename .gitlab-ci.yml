@@ -1,0 +1,64 @@
+# NDS Skills 배포 파이프라인
+#
+# 목적:
+# - skills/ 디렉토리를 nds-skills.zip으로 패키징
+# - install.sh, install.ps1, nds-skills.zip을 Nexus(raw-repository)에 업로드
+#
+# 사용자 설치 방법:
+#   macOS/Linux: curl -fsSL https://repo.gabia.com/repository/raw-repository/nds/install.sh | bash
+#   Windows:     irm https://repo.gabia.com/repository/raw-repository/nds/install.ps1 | iex
+#
+# GitLab CI variables 설정 (Protected/Masked 권장):
+#   - NDS_NEXUS_USERNAME: Nexus 사용자명
+#   - NDS_NEXUS_PASSWORD: Nexus 비밀번호
+#   - NDS_NEXUS_URL: (선택) Nexus base URL (기본: https://repo.gabia.com/repository/raw-repository/nds)
+
+stages:
+  - deploy
+
+variables:
+  NDS_NEXUS_URL: "https://repo.gabia.com/repository/raw-repository/nds"
+
+deploy:skills:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - skills/**/*
+        - install.sh
+        - install.ps1
+        - skills/manifest.txt
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  script:
+    - set -euo pipefail
+
+    # skills 디렉토리를 zip으로 패키징
+    - echo "=== Packaging nds-skills.zip ==="
+    - cd skills
+    - zip -r ../nds-skills.zip . -x "__pycache__/*" "*.pyc" ".DS_Store"
+    - cd ..
+    - ls -lh nds-skills.zip
+
+    # Nexus에 업로드
+    - echo "=== Uploading to Nexus ==="
+    - |
+      upload_file() {
+        local file="$1"
+        local dest="$2"
+        echo "Uploading: $file -> $dest"
+        curl --fail --silent --show-error \
+          -u "${NDS_NEXUS_USERNAME}:${NDS_NEXUS_PASSWORD}" \
+          --upload-file "$file" \
+          "$dest"
+        echo "  OK: $dest"
+      }
+
+    - upload_file "install.sh"     "${NDS_NEXUS_URL}/install.sh"
+    - upload_file "install.ps1"    "${NDS_NEXUS_URL}/install.ps1"
+    - upload_file "nds-skills.zip" "${NDS_NEXUS_URL}/nds-skills.zip"
+
+    - echo "=== Deploy complete ==="
+    - echo "macOS/Linux: curl -fsSL ${NDS_NEXUS_URL}/install.sh | bash"
+    - echo "Windows:     irm ${NDS_NEXUS_URL}/install.ps1 | iex"
