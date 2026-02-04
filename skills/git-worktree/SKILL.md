@@ -112,8 +112,19 @@ wt rm <worktree-name>
 4. 작업 완료 후 사용자에게 swap 여부 확인
 5. 필요 시 swap, 불필요한 worktree 정리
 
+### .gitignore 설정 (필수)
+
+`.worktree/` 디렉토리는 반드시 `.gitignore`에 등록해야 한다. worktree는 로컬 작업 환경이므로 원격 저장소에 포함되면 안 된다.
+
+```bash
+# .gitignore에 추가 확인
+grep -q '\.worktree' .gitignore 2>/dev/null || echo '.worktree/' >> .gitignore
+```
+
+`wt add` 최초 실행 시 `.gitignore`에 `.worktree/` 항목이 없으면 자동 추가되지만, 수동으로 설정하는 경우에도 반드시 확인한다.
+
 ### 주의사항
 
 - swap 전 uncommitted 변경사항은 commit 또는 stash 권장
-- `.worktree/`는 `.gitignore`에 등록되어 있어야 함 (install 스크립트가 자동 처리)
+- `.worktree/`는 `.gitignore`에 등록되어 있어야 함 (위 섹션 참고)
 - 메인 디렉토리의 파일을 직접 수정하지 말고 반드시 worktree를 통해 작업
