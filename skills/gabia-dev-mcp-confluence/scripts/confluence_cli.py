@@ -319,6 +319,16 @@ def html_to_markdown_light(html: str) -> str:
     return text.strip()
 
 
+def _resolve_page_id(raw: str) -> str:
+    """Extract page_id from a raw string that may be an ID or a Confluence URL."""
+    if raw.isdigit():
+        return raw
+    m = re.search(r"/pages/(\d+)", raw)
+    if m:
+        return m.group(1)
+    return raw
+
+
 def _read_text_argument(value: str | None, file_path: str | None) -> str:
     if value is not None:
         return value
@@ -424,7 +434,7 @@ def cmd_get(args: argparse.Namespace) -> None:
     expand = expand_with_meta if include_metadata else expand_no_meta
 
     if args.page_id:
-        page_obj = _get_page_by_id(base_url, args.page_id, expand)
+        page_obj = _get_page_by_id(base_url, _resolve_page_id(args.page_id), expand)
     else:
         page_obj = _get_page_by_title(base_url, args.space_key, args.title, expand)
 
@@ -499,7 +509,7 @@ def cmd_update(args: argparse.Namespace) -> None:
     content = _read_text_argument(args.content, args.content_file)
     body_value, representation = _normalize_body(content, args.format)
 
-    current = _get_page_by_id(base_url, args.page_id, "version,ancestors")
+    current = _get_page_by_id(base_url, _resolve_page_id(args.page_id), "version,ancestors")
     current_version = ((current.get("version") or {}) if isinstance(current.get("version"), dict) else {}).get("number") or 1
     new_version = int(current_version) + 1
 
@@ -515,28 +525,87 @@ def cmd_update(args: argparse.Namespace) -> None:
     if args.parent_id:
         payload["ancestors"] = [{"id": args.parent_id}]
 
-    updated = _http_json("PUT", f"{base_url}/rest/api/content/{args.page_id}", body=payload)
+    page_id = _resolve_page_id(args.page_id)
+    updated = _http_json("PUT", f"{base_url}/rest/api/content/{page_id}", body=payload)
     print(json.dumps(updated, ensure_ascii=False))
 
 
 def cmd_delete(args: argparse.Namespace) -> None:
     base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
-    _http_json("DELETE", f"{base_url}/rest/api/content/{args.page_id}")
-    print(json.dumps({"success": True, "page_id": args.page_id}, ensure_ascii=False))
+    page_id = _resolve_page_id(args.page_id)
+    _http_json("DELETE", f"{base_url}/rest/api/content/{page_id}")
+    print(json.dumps({"success": True, "page_id": page_id}, ensure_ascii=False))
+
+
+def cmd_comments(args: argparse.Namespace) -> None:
+    """List comments on a Confluence page."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+    page_id = _resolve_page_id(args.page_id)
+    limit = max(1, min(100, args.limit))
+
+    url = f"{base_url}/rest/api/content/{page_id}/child/comment"
+    params = {
+        "expand": "body.storage,version",
+        "limit": str(limit),
+    }
+    payload = _http_json("GET", url, params=params)
+
+    comments: list[dict] = []
+    for c in payload.get("results") or []:
+        version = c.get("version") or {}
+        by = version.get("by") or {}
+        comments.append({
+            "id": c.get("id"),
+            "body": (c.get("body") or {}).get("storage", {}).get("value", ""),
+            "version": version.get("number"),
+            "author": by.get("displayName"),
+            "authorUsername": by.get("username"),
+            "createdAt": version.get("when"),
+        })
+
+    print(json.dumps(comments, ensure_ascii=False))
 
 
 def cmd_comment(args: argparse.Namespace) -> None:
     base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+    page_id = _resolve_page_id(args.page_id)
     content = _read_text_argument(args.content, args.content_file)
     body_value, representation = _normalize_body(content, args.format)
 
     payload = {
         "type": "comment",
-        "container": {"type": "page", "id": args.page_id},
+        "container": {"type": "page", "id": page_id},
         "body": {"storage": {"value": body_value, "representation": representation}},
     }
     created = _http_json("POST", f"{base_url}/rest/api/content", body=payload)
     print(json.dumps(created, ensure_ascii=False))
+
+
+def cmd_comment_update(args: argparse.Namespace) -> None:
+    """Update an existing comment."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+    content = _read_text_argument(args.content, args.content_file)
+    body_value, representation = _normalize_body(content, args.format)
+
+    # Get current comment version
+    current = _http_json("GET", f"{base_url}/rest/api/content/{args.comment_id}", params={"expand": "version"})
+    current_version = ((current.get("version") or {}) if isinstance(current.get("version"), dict) else {}).get("number") or 1
+
+    payload = {
+        "id": args.comment_id,
+        "type": "comment",
+        "version": {"number": int(current_version) + 1},
+        "body": {"storage": {"value": body_value, "representation": representation}},
+    }
+    updated = _http_json("PUT", f"{base_url}/rest/api/content/{args.comment_id}", body=payload)
+    print(json.dumps(updated, ensure_ascii=False))
+
+
+def cmd_comment_delete(args: argparse.Namespace) -> None:
+    """Delete a comment."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+    _http_json("DELETE", f"{base_url}/rest/api/content/{args.comment_id}")
+    print(json.dumps({"success": True, "comment_id": args.comment_id}, ensure_ascii=False))
 
 
 def cmd_attachments(args: argparse.Namespace) -> None:
@@ -546,7 +615,8 @@ def cmd_attachments(args: argparse.Namespace) -> None:
     if not args.page_id:
         raise SystemExit("[ERROR] Provide --page-id.")
 
-    url = f"{base_url}/rest/api/content/{args.page_id}/child/attachment"
+    page_id = _resolve_page_id(args.page_id)
+    url = f"{base_url}/rest/api/content/{page_id}/child/attachment"
     params = {"limit": str(args.limit)} if args.limit else None
     payload = _http_json("GET", url, params=params)
 
@@ -604,7 +674,8 @@ def cmd_download(args: argparse.Namespace) -> None:
         raise SystemExit("[ERROR] Provide --page-id.")
 
     # Get attachments list
-    url = f"{base_url}/rest/api/content/{args.page_id}/child/attachment"
+    page_id = _resolve_page_id(args.page_id)
+    url = f"{base_url}/rest/api/content/{page_id}/child/attachment"
     payload = _http_json("GET", url, params={"limit": "100"})
     results = payload.get("results") or []
 
@@ -703,12 +774,28 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--page-id", required=True)
     d.set_defaults(func=cmd_delete)
 
+    cms = sub.add_parser("comments", help="List comments on a Confluence page")
+    cms.add_argument("--page-id", required=True, help="Page ID or Confluence URL")
+    cms.add_argument("--limit", type=int, default=25, help="Max number of comments to return")
+    cms.set_defaults(func=cmd_comments)
+
     cm = sub.add_parser("comment", help="Add a comment to a Confluence page")
-    cm.add_argument("--page-id", required=True)
-    cm.add_argument("--format", default="markdown", choices=["markdown", "wiki", "storage"])
+    cm.add_argument("--page-id", required=True, help="Page ID or Confluence URL")
+    cm.add_argument("--format", default="storage", choices=["markdown", "wiki", "storage"])
     cm.add_argument("--content")
     cm.add_argument("--content-file")
     cm.set_defaults(func=cmd_comment)
+
+    cu = sub.add_parser("comment-update", help="Update an existing comment")
+    cu.add_argument("--comment-id", required=True)
+    cu.add_argument("--format", default="storage", choices=["markdown", "wiki", "storage"])
+    cu.add_argument("--content")
+    cu.add_argument("--content-file")
+    cu.set_defaults(func=cmd_comment_update)
+
+    cd = sub.add_parser("comment-delete", help="Delete a comment")
+    cd.add_argument("--comment-id", required=True)
+    cd.set_defaults(func=cmd_comment_delete)
 
     att = sub.add_parser("attachments", help="List attachments for a Confluence page")
     att.add_argument("--page-id", required=True)

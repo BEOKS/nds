@@ -1,6 +1,6 @@
 ---
 name: gabia-dev-mcp-confluence
-description: Confluence REST API를 직접 호출해 페이지 검색/조회/생성/수정/삭제/댓글을 자동화할 때 사용한다. MCP가 없어도 scripts/confluence_cli.py로 수행한다.
+description: Confluence REST API를 직접 호출해 페이지 검색/조회/생성/수정/삭제/댓글(조회/추가/수정/삭제)을 자동화할 때 사용한다. MCP가 없어도 scripts/confluence_cli.py로 수행한다.
 ---
 
 # Confluence Automation
@@ -10,10 +10,11 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 - 페이지 검색(단순 텍스트 또는 CQL)
 - 페이지 조회(page_id 또는 title+space_key)
 - 페이지 생성/수정/삭제
-- 댓글 추가
-- **첨부파일 목록 조회**
-- **첨부파일 다운로드** (개별 또는 전체)
+- **댓글 조회/추가/수정/삭제**
+- 첨부파일 목록 조회
+- 첨부파일 다운로드 (개별 또는 전체)
 - Markdown ↔ Confluence storage HTML(간이 변환)
+- **URL에서 page-id 자동 추출** (`--page-id`에 Confluence URL을 그대로 전달 가능)
 
 ## 사전 조건(환경변수)
 
@@ -34,59 +35,48 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 3. 새 문서면 `create`, 기존 문서 수정이면 `update`를 사용합니다.
 4. 변경 이력/추가 설명은 `comment`로 남깁니다.
 
+### 댓글 워크플로우
+
+1. `comments`로 기존 댓글 조회 → 형식/패턴 파악
+2. `comment`로 새 댓글 추가 (기본 format: `storage`)
+3. 수정이 필요하면 `comment-update --comment-id <id>`
+4. 삭제가 필요하면 `comment-delete --comment-id <id>`
+
 ## 사용법(스크립트)
 
-- 검색
-  - `python3 scripts/confluence_cli.py search --query "deployment guide" --limit 10`
-  - `--spaces-filter ""`를 주면 space 필터를 강제로 해제합니다.
-- 페이지 조회
-  - `python3 scripts/confluence_cli.py get --page-id 123456` (기본: HTML)
-  - `python3 scripts/confluence_cli.py get --page-id 123456 --output-format storage` (원본 XML, 매크로 포함)
-  - `python3 scripts/confluence_cli.py get --page-id 123456 --output-format markdown` (Markdown 변환)
-  - 또는 `python3 scripts/confluence_cli.py get --space-key DEV --title "문서 제목"`
-- 페이지 생성/수정/댓글
-  - `--format` 기본은 `storage`(HTML)이며, 본문을 그대로 Confluence에 업로드합니다.
-  - Markdown으로 작성하려면 `--format markdown`을 지정하면 스크립트가 HTML로 변환합니다.
-- 첨부파일 목록 조회
-  - `python3 scripts/confluence_cli.py attachments --page-id 123456`
-- 첨부파일 다운로드
-  - `python3 scripts/confluence_cli.py download --page-id 123456` (전체 다운로드)
-  - `python3 scripts/confluence_cli.py download --page-id 123456 --filename "문서.pdf"` (특정 파일)
-  - `python3 scripts/confluence_cli.py download --page-id 123456 -o ./downloads` (저장 경로 지정)
-
-## 예시
-
-### 검색 → 페이지 열기
+### 검색
 
 ```bash
-python3 scripts/confluence_cli.py search \
-  --query 'space = "DEV" AND title ~ "API*" ORDER BY lastmodified DESC' \
-  --limit 5
+python3 scripts/confluence_cli.py search --query "deployment guide" --limit 10
 ```
+- `--spaces-filter ""`를 주면 space 필터를 강제로 해제합니다.
+
+### 페이지 조회
 
 ```bash
-# HTML로 조회 (기본값, 렌더링된 결과)
-python3 scripts/confluence_cli.py get \
-  --page-id 123456789 \
-  --include-metadata
+# HTML로 조회 (기본값)
+python3 scripts/confluence_cli.py get --page-id 123456
 
-# Storage format으로 조회 (원본 XML, 매크로 코드 확인 가능)
-python3 scripts/confluence_cli.py get \
-  --page-id 123456789 \
-  --output-format storage \
-  --include-metadata
+# Storage format으로 조회 (원본 XML, 매크로 포함)
+python3 scripts/confluence_cli.py get --page-id 123456 --output-format storage
 
 # Markdown으로 변환해서 조회
-python3 scripts/confluence_cli.py get \
-  --page-id 123456789 \
-  --output-format markdown \
-  --include-metadata
+python3 scripts/confluence_cli.py get --page-id 123456 --output-format markdown
+
+# title + space-key로 조회
+python3 scripts/confluence_cli.py get --space-key DEV --title "문서 제목"
+
+# Confluence URL을 그대로 전달 (page-id 자동 추출)
+python3 scripts/confluence_cli.py get --page-id "https://confluence.example.com/spaces/DEV/pages/123456/제목"
 ```
 
-### 페이지 생성
+### 페이지 생성/수정/삭제
+
+- `--format` 기본은 `storage`(HTML)이며, 본문을 그대로 Confluence에 업로드합니다.
+- Markdown으로 작성하려면 `--format markdown`을 지정하면 스크립트가 HTML로 변환합니다.
 
 ```bash
-# HTML로 생성 (기본값)
+# 페이지 생성
 python3 scripts/confluence_cli.py create \
   --space DEV \
   --title '릴리즈 노트 - 2026-01-07' \
@@ -98,45 +88,56 @@ python3 scripts/confluence_cli.py create \
   --title '릴리즈 노트 - 2026-01-07' \
   --format markdown \
   --content-file ./release-note.md
-```
 
-### 페이지 수정 + 댓글 남기기
-
-```bash
+# 페이지 수정
 python3 scripts/confluence_cli.py update \
   --page-id 123456789 \
   --title '릴리즈 노트 - 2026-01-07' \
   --version-comment '자동 업데이트: MR 요약 반영' \
   --content-file ./release-note.md
+
+# 페이지 삭제
+python3 scripts/confluence_cli.py delete --page-id 123456789
 ```
 
+### 댓글
+
 ```bash
+# 댓글 목록 조회
+python3 scripts/confluence_cli.py comments --page-id 123456789
+python3 scripts/confluence_cli.py comments --page-id 123456789 --limit 50
+
+# 댓글 추가 (기본 format: storage - HTML을 그대로 전달)
+python3 scripts/confluence_cli.py comment \
+  --page-id 123456789 \
+  --content '<p>댓글 내용</p>'
+
+# 댓글 추가 (Markdown으로 작성)
 python3 scripts/confluence_cli.py comment \
   --page-id 123456789 \
   --format markdown \
-  --content '변경 요약: 배포 후 모니터링 항목을 추가했습니다.'
+  --content '**변경 요약**: 배포 후 모니터링 항목을 추가했습니다.'
+
+# 댓글 수정 (comment-id는 comments 조회 결과에서 확인)
+python3 scripts/confluence_cli.py comment-update \
+  --comment-id 241913446 \
+  --content '<p>수정된 댓글 내용</p>'
+
+# 댓글 삭제
+python3 scripts/confluence_cli.py comment-delete --comment-id 241913446
 ```
 
-### 첨부파일 조회 및 다운로드
+### 첨부파일
 
 ```bash
 # 첨부파일 목록 조회
-python3 scripts/confluence_cli.py attachments \
-  --page-id 123456789
+python3 scripts/confluence_cli.py attachments --page-id 123456789
 
-# 출력 예시:
-# [{"id": "att123", "title": "guide.pdf", "mediaType": "application/pdf", "fileSize": 1234567, ...}]
-```
-
-```bash
 # 모든 첨부파일 다운로드 (현재 디렉토리)
-python3 scripts/confluence_cli.py download \
-  --page-id 123456789
+python3 scripts/confluence_cli.py download --page-id 123456789
 
 # 특정 파일만 다운로드
-python3 scripts/confluence_cli.py download \
-  --page-id 123456789 \
-  --filename "가이드문서.pdf"
+python3 scripts/confluence_cli.py download --page-id 123456789 --filename "가이드문서.pdf"
 
 # 지정 경로에 다운로드 (기존 파일 덮어쓰기)
 python3 scripts/confluence_cli.py download \
@@ -144,3 +145,11 @@ python3 scripts/confluence_cli.py download \
   --output-dir ./attachments \
   --overwrite
 ```
+
+## 주의사항
+
+- `comment`와 `comment-update`의 기본 format은 **`storage`** (Confluence HTML)입니다.
+  - Confluence에서 복사한 HTML을 그대로 전달할 때는 기본값 사용
+  - Markdown으로 작성하려면 반드시 `--format markdown` 지정
+- `--page-id`에 page ID 숫자 또는 Confluence URL을 모두 사용할 수 있습니다.
+  - 예: `--page-id 241911562` 또는 `--page-id "https://confluence.gabia.com/spaces/clouddev/pages/241911562/..."`
