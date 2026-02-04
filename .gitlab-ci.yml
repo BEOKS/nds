@@ -54,10 +54,9 @@ deploy:skills:
           "$dest"
         echo "  OK: $dest"
       }
-
-    - upload_file "install.sh"     "${NDS_NEXUS_URL}/install.sh"
-    - upload_file "install.ps1"    "${NDS_NEXUS_URL}/install.ps1"
-    - upload_file "nds-skills.zip" "${NDS_NEXUS_URL}/nds-skills.zip"
+      upload_file "install.sh"     "${NDS_NEXUS_URL}/install.sh"
+      upload_file "install.ps1"    "${NDS_NEXUS_URL}/install.ps1"
+      upload_file "nds-skills.zip" "${NDS_NEXUS_URL}/nds-skills.zip"
 
     - echo "=== Deploy complete ==="
     - echo "macOS/Linux: curl -fsSL ${NDS_NEXUS_URL}/install.sh | bash"
