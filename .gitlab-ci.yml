@@ -9,8 +9,8 @@
 #   Windows:     irm https://repo.gabia.com/repository/raw-repository/nds/install.ps1 | iex
 #
 # GitLab CI variables 설정 (Protected/Masked 권장):
-#   - NDS_NEXUS_USERNAME: Nexus 사용자명
-#   - NDS_NEXUS_PASSWORD: Nexus 비밀번호
+#   - NEXUS_USERNAME: Nexus 사용자명
+#   - NEXUS_PASSWORD: Nexus 비밀번호
 #   - NDS_NEXUS_URL: (선택) Nexus base URL (기본: https://repo.gabia.com/repository/raw-repository/nds)
 
 stages:
@@ -49,7 +49,7 @@ deploy:skills:
         local dest="$2"
         echo "Uploading: $file -> $dest"
         curl --fail --silent --show-error \
-          -u "${NDS_NEXUS_USERNAME}:${NDS_NEXUS_PASSWORD}" \
+          -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
           --upload-file "$file" \
           "$dest"
         echo "  OK: $dest"
