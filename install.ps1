@@ -405,6 +405,246 @@ if ($List) {
 }
 
 # ============================================================================
+# Python installation and dependency management
+# ============================================================================
+$script:PythonCmd = $null
+$script:PipCmd = $null
+$script:SkipPython = $false
+
+function Find-Python {
+    # Try py launcher first (Windows-specific), then python3, then python
+    $pythonPaths = @(
+        "py -3",
+        "python3",
+        "python",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "$env:ProgramFiles\Python312\python.exe",
+        "$env:ProgramFiles\Python311\python.exe",
+        "$env:ProgramFiles\Python310\python.exe"
+    )
+
+    foreach ($pythonPath in $pythonPaths) {
+        try {
+            if ($pythonPath -eq "py -3") {
+                # Special handling for py launcher
+                $version = & py -3 --version 2>&1
+                if ($version -match "Python 3") {
+                    $script:PythonCmd = "py -3"
+                    break
+                }
+            }
+            else {
+                $version = & $pythonPath --version 2>&1
+                if ($version -match "Python 3") {
+                    $script:PythonCmd = $pythonPath
+                    break
+                }
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
+    if ($script:PythonCmd) {
+        # Always prefer python -m pip to ensure pip matches Python version
+        try {
+            if ($script:PythonCmd -eq "py -3") {
+                & py -3 -m pip --version 2>&1 | Out-Null
+                $script:PipCmd = "py -3 -m pip"
+            }
+            else {
+                & $script:PythonCmd -m pip --version 2>&1 | Out-Null
+                $script:PipCmd = "$script:PythonCmd -m pip"
+            }
+            return $true
+        }
+        catch {
+            Write-Warn "pip not available for $script:PythonCmd"
+        }
+        return $true
+    }
+
+    return $false
+}
+
+function Get-PythonVersion {
+    if ($script:PythonCmd) {
+        $version = & $script:PythonCmd --version 2>&1
+        if ($version -match "Python (\d+\.\d+\.\d+)") {
+            return $matches[1]
+        }
+    }
+    return $null
+}
+
+function Install-PythonWindows {
+    Write-Info "Attempting to install Python on Windows..."
+
+    # Check for winget
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Info "Installing Python via winget..."
+        try {
+            winget install -e --id Python.Python.3.11 --accept-package-agreements --accept-source-agreements
+            return $true
+        }
+        catch {
+            Write-Warn "winget installation failed"
+        }
+    }
+
+    # Check for chocolatey
+    if (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Info "Installing Python via Chocolatey..."
+        try {
+            choco install python3 -y
+            return $true
+        }
+        catch {
+            Write-Warn "Chocolatey installation failed"
+        }
+    }
+
+    # Check for scoop
+    if (Get-Command scoop -ErrorAction SilentlyContinue) {
+        Write-Info "Installing Python via Scoop..."
+        try {
+            scoop install python
+            return $true
+        }
+        catch {
+            Write-Warn "Scoop installation failed"
+        }
+    }
+
+    # Fallback: Download from python.org
+    Write-Warn "No package manager found. Please install Python manually:"
+    Write-Host "  1. Visit https://www.python.org/downloads/"
+    Write-Host "  2. Download and install Python 3.11 or later"
+    Write-Host "  3. Make sure to check 'Add Python to PATH' during installation"
+    Write-Host "  4. Re-run this installer"
+    return $false
+}
+
+function Test-AndInstallPython {
+    Write-Host ""
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host "   Python Environment Setup" -ForegroundColor Cyan
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    if (Find-Python) {
+        $version = Get-PythonVersion
+        Write-Success "Python found: $script:PythonCmd (version $version)"
+
+        if ($script:PipCmd) {
+            Write-Success "pip found: $script:PipCmd"
+        }
+        else {
+            Write-Warn "pip not available. Python dependencies will not be installed."
+            return $false
+        }
+        return $true
+    }
+
+    Write-Warn "Python 3 not found on this system."
+    Write-Host ""
+    Write-Host "Python is required for many NDS skills to work properly."
+    Write-Host ""
+
+    $answer = Read-Host "Would you like to install Python automatically? (y/n)"
+
+    if ($answer -match "^[Yy]") {
+        if (Install-PythonWindows) {
+            # Refresh environment and re-detect
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+            if (Find-Python) {
+                Write-Success "Python installed successfully: $script:PythonCmd"
+                return $true
+            }
+        }
+        Write-Err "Failed to install Python"
+        return $false
+    }
+    else {
+        Write-Warn "Skipping Python installation"
+        $script:SkipPython = $true
+        return $false
+    }
+}
+
+function Install-PythonDependencies {
+    if ($script:SkipPython -or -not $script:PipCmd) {
+        Write-Warn "Skipping Python dependencies installation"
+        return
+    }
+
+    Write-Host ""
+    Write-Info "Installing Python dependencies..."
+
+    # Download requirements.txt
+    $reqUrl = "$NexusBaseUrl/requirements.txt"
+    $reqFile = Join-Path $env:TEMP "nds-requirements.txt"
+
+    try {
+        Invoke-WebRequest -Uri $reqUrl -OutFile $reqFile -ErrorAction Stop
+        Write-Info "Downloaded requirements.txt from Nexus"
+    }
+    catch {
+        # Fallback: try GitLab
+        $reqUrl = "https://$GitLabHost/$GitLabProject/-/raw/$Branch/requirements.txt"
+        try {
+            Invoke-WebRequest -Uri $reqUrl -OutFile $reqFile -ErrorAction Stop
+            Write-Info "Downloaded requirements.txt from GitLab"
+        }
+        catch {
+            Write-Warn "Could not download requirements.txt"
+            return
+        }
+    }
+
+    # Install dependencies
+    Write-Info "Installing packages (this may take a few minutes)..."
+
+    try {
+        # Build and execute pip install command based on detected pip
+        if ($script:PipCmd -eq "py -3 -m pip") {
+            $process = Start-Process -FilePath "py" -ArgumentList "-3", "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+        }
+        elseif ($script:PipCmd -match "-m pip$") {
+            # Using python -m pip
+            $process = Start-Process -FilePath $script:PythonCmd -ArgumentList "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+        }
+        else {
+            # Direct pip command (shouldn't happen with current logic, but kept for safety)
+            $process = Start-Process -FilePath "pip" -ArgumentList "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+        }
+
+        if ($process.ExitCode -eq 0) {
+            Write-Success "Python dependencies installed successfully"
+        }
+        else {
+            Write-Warn "Some Python dependencies may have failed to install (exit code: $($process.ExitCode))"
+            Write-Warn "You can manually install them later with:"
+            Write-Host "  pip install -r requirements.txt"
+        }
+    }
+    catch {
+        Write-Warn "Failed to install Python dependencies: $_"
+        Write-Warn "You can manually install them later with:"
+        Write-Host "  pip install -r requirements.txt"
+    }
+    finally {
+        if (Test-Path $reqFile) {
+            Remove-Item $reqFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# ============================================================================
 # Download and install skills
 # ============================================================================
 function Install-Skills {
@@ -752,6 +992,9 @@ function Main {
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
 
+    # Check and install Python
+    Test-AndInstallPython | Out-Null
+
     # Interactive selection if no agents specified
     if ($SelectedAgents.Count -eq 0) {
         # Check if running interactively
@@ -836,9 +1079,12 @@ function Main {
         exit 1
     }
 
-    Write-Success "Installation complete!"
+    Write-Success "Skills installation complete!"
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
+
+    # Install Python dependencies
+    Install-PythonDependencies
 
     # Configure environment variables
     Configure-EnvironmentVariables
@@ -847,6 +1093,9 @@ function Main {
     Write-Host "Next steps:"
     Write-Host "  1. Restart your coding agent"
     Write-Host "  2. Restart PowerShell to apply environment variables"
+    if ($script:PythonCmd) {
+        Write-Host "  3. Python dependencies have been installed for skills"
+    }
     Write-Host ""
 }
 
