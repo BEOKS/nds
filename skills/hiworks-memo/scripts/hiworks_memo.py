@@ -27,6 +27,7 @@ import base64
 import json
 import os
 import sys
+import webbrowser
 from typing import Optional, Union
 from urllib.parse import urlencode
 
@@ -576,6 +577,23 @@ def try_env_auth(env: str) -> Optional[HiworksAuth]:
     return None
 
 
+GABIA_DOMAINS = {"gabia.com", "devapproval.com", "devapproval.shop"}
+
+
+def open_login_page(domain: Optional[str] = None) -> None:
+    """브라우저에서 하이웍스 로그인 페이지 열기"""
+    if domain and domain in GABIA_DOMAINS:
+        login_url = f"https://login.gabiaoffice.hiworks.com/{domain}"
+    elif domain:
+        login_url = f"https://login.office.hiworks.com/{domain}"
+    else:
+        login_url = "https://office.hiworks.com"
+
+    print(f"브라우저에서 로그인 페이지를 엽니다: {login_url}", file=sys.stderr)
+    print("로그인 완료 후 다시 명령어를 실행하세요.", file=sys.stderr)
+    webbrowser.open(login_url)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Hiworks 쪽지 API 클라이언트")
     subparsers = parser.add_subparsers(dest="command", help="명령어")
@@ -622,7 +640,8 @@ def main():
         # 쿠키 인증만 사용
         auth = try_cookie_auth(domain, env)
         if not auth:
-            print("Error: 쿠키 인증 실패. 브라우저에서 hiworks.com에 로그인하세요.", file=sys.stderr)
+            print("Error: 쿠키 인증 실패 - 세션이 만료되었습니다.", file=sys.stderr)
+            open_login_page(domain)
             sys.exit(1)
 
     elif auth_mode == "env":
@@ -640,18 +659,10 @@ def main():
         if not auth:
             auth = try_env_auth(env)
 
-        # 3. 둘 다 실패
+        # 3. 둘 다 실패 → 로그인 페이지 열기
         if not auth:
-            print("Error: 인증 실패", file=sys.stderr)
-            print("", file=sys.stderr)
-            print("방법 1) 크롬 브라우저에서 hiworks.com에 로그인하세요", file=sys.stderr)
-            print("        pip install browser_cookie3", file=sys.stderr)
-            print("", file=sys.stderr)
-            print("방법 2) 환경변수를 설정하세요:", file=sys.stderr)
-            print("        export HIWORKS_ID=<id>", file=sys.stderr)
-            print("        export HIWORKS_DOMAIN=<domain>", file=sys.stderr)
-            print("        export HIWORKS_PWD=<password>", file=sys.stderr)
-            print("        pip install pycryptodome pyotp", file=sys.stderr)
+            print("Error: 인증 실패 - 세션이 만료되었거나 로그인이 필요합니다.", file=sys.stderr)
+            open_login_page(domain)
             sys.exit(1)
 
     # 쪽지 API 클라이언트
