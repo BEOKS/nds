@@ -27,8 +27,8 @@ export HIWORKS_DOMAIN="company.com"   # 도메인
 export HIWORKS_PWD="password"         # 비밀번호
 export HIWORKS_OTP_SECRET="..."       # OTP 시크릿 (선택, TOTP 기반)
 export HIWORKS_ENV="prod"             # 환경: prod/dev/stage (기본: prod)
-```
-
+````
+₩
 ### 인증 모드 선택
 
 ```bash
