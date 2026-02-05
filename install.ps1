@@ -412,8 +412,9 @@ $script:PipCmd = $null
 $script:SkipPython = $false
 
 function Find-Python {
-    # Try python3 first (common on systems with both Python 2 and 3)
+    # Try py launcher first (Windows-specific), then python3, then python
     $pythonPaths = @(
+        "py -3",
         "python3",
         "python",
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
@@ -426,10 +427,20 @@ function Find-Python {
 
     foreach ($pythonPath in $pythonPaths) {
         try {
-            $version = & $pythonPath --version 2>&1
-            if ($version -match "Python 3") {
-                $script:PythonCmd = $pythonPath
-                break
+            if ($pythonPath -eq "py -3") {
+                # Special handling for py launcher
+                $version = & py -3 --version 2>&1
+                if ($version -match "Python 3") {
+                    $script:PythonCmd = "py -3"
+                    break
+                }
+            }
+            else {
+                $version = & $pythonPath --version 2>&1
+                if ($version -match "Python 3") {
+                    $script:PythonCmd = $pythonPath
+                    break
+                }
             }
         }
         catch {
@@ -438,22 +449,20 @@ function Find-Python {
     }
 
     if ($script:PythonCmd) {
-        # Try to find pip
+        # Always prefer python -m pip to ensure pip matches Python version
         try {
-            & $script:PythonCmd -m pip --version 2>&1 | Out-Null
-            $script:PipCmd = "$script:PythonCmd -m pip"
+            if ($script:PythonCmd -eq "py -3") {
+                & py -3 -m pip --version 2>&1 | Out-Null
+                $script:PipCmd = "py -3 -m pip"
+            }
+            else {
+                & $script:PythonCmd -m pip --version 2>&1 | Out-Null
+                $script:PipCmd = "$script:PythonCmd -m pip"
+            }
             return $true
         }
         catch {
-            # Try pip3 or pip directly
-            if (Get-Command pip3 -ErrorAction SilentlyContinue) {
-                $script:PipCmd = "pip3"
-                return $true
-            }
-            if (Get-Command pip -ErrorAction SilentlyContinue) {
-                $script:PipCmd = "pip"
-                return $true
-            }
+            Write-Warn "pip not available for $script:PythonCmd"
         }
         return $true
     }
@@ -601,23 +610,24 @@ function Install-PythonDependencies {
     Write-Info "Installing packages (this may take a few minutes)..."
 
     try {
-        $pipArgs = $script:PipCmd -split ' '
-        $pipArgs += @("install", "--user", "-r", $reqFile)
-
-        if ($script:PipCmd -match "^python") {
+        # Build and execute pip install command based on detected pip
+        if ($script:PipCmd -eq "py -3 -m pip") {
+            $process = Start-Process -FilePath "py" -ArgumentList "-3", "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+        }
+        elseif ($script:PipCmd -match "-m pip$") {
             # Using python -m pip
             $process = Start-Process -FilePath $script:PythonCmd -ArgumentList "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
         }
         else {
-            # Using pip directly
-            $process = Start-Process -FilePath $script:PipCmd -ArgumentList "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+            # Direct pip command (shouldn't happen with current logic, but kept for safety)
+            $process = Start-Process -FilePath "pip" -ArgumentList "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
         }
 
         if ($process.ExitCode -eq 0) {
             Write-Success "Python dependencies installed successfully"
         }
         else {
-            Write-Warn "Some Python dependencies may have failed to install"
+            Write-Warn "Some Python dependencies may have failed to install (exit code: $($process.ExitCode))"
             Write-Warn "You can manually install them later with:"
             Write-Host "  pip install -r requirements.txt"
         }

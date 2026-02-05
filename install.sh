@@ -238,13 +238,16 @@ detect_python() {
     fi
 
     if [ -n "$PYTHON_CMD" ]; then
-        # Detect pip
-        if command -v pip3 >/dev/null 2>&1; then
-            PIP_CMD="pip3"
-        elif command -v pip >/dev/null 2>&1; then
-            PIP_CMD="pip"
-        elif $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
+        # Always prefer $PYTHON_CMD -m pip to ensure pip matches Python version
+        if $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
             PIP_CMD="$PYTHON_CMD -m pip"
+        elif command -v pip3 >/dev/null 2>&1; then
+            # Verify pip3 points to the same Python
+            local pip3_python
+            pip3_python=$(pip3 --version 2>&1 | grep -oE 'python [0-9.]+' | head -1)
+            if [ -n "$pip3_python" ]; then
+                PIP_CMD="pip3"
+            fi
         fi
         return 0
     fi
@@ -263,7 +266,7 @@ install_python_macos() {
     # Check for Homebrew
     if command -v brew >/dev/null 2>&1; then
         info "Installing Python via Homebrew..."
-        brew install python3
+        brew install python
         return $?
     fi
 
@@ -425,20 +428,29 @@ install_python_dependencies() {
     # Install dependencies
     info "Installing packages (this may take a few minutes)..."
 
-    if $PIP_CMD install --user -r "$req_file" 2>&1 | while IFS= read -r line; do
-        # Show progress for key packages
-        if echo "$line" | grep -q "Successfully installed"; then
-            echo -e "${GREEN}[OK]${NC} $line"
-        elif echo "$line" | grep -q "Requirement already satisfied"; then
-            : # Skip already installed messages
-        elif echo "$line" | grep -q "ERROR\|error"; then
-            echo -e "${RED}[ERROR]${NC} $line"
-        fi
-    done; then
+    # Use temp file to capture pip output and exit code properly
+    local pip_log="${TEMP_DIR:-/tmp}/nds-pip-install.log"
+    local pip_exit_code=0
+
+    $PIP_CMD install --user -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
+
+    # Show relevant output
+    if [ -f "$pip_log" ]; then
+        while IFS= read -r line; do
+            if echo "$line" | grep -q "Successfully installed"; then
+                echo -e "${GREEN}[OK]${NC} $line"
+            elif echo "$line" | grep -q "ERROR\|error"; then
+                echo -e "${RED}[ERROR]${NC} $line"
+            fi
+        done < "$pip_log"
+        rm -f "$pip_log"
+    fi
+
+    if [ $pip_exit_code -eq 0 ]; then
         success "Python dependencies installed successfully"
         return 0
     else
-        warn "Some Python dependencies may have failed to install"
+        warn "Some Python dependencies may have failed to install (exit code: $pip_exit_code)"
         warn "You can manually install them later with:"
         echo "  pip install -r requirements.txt"
         return 1
@@ -1034,8 +1046,8 @@ main() {
         exit 0
     fi
 
-    # Check and install Python
-    check_and_install_python
+    # Check and install Python (don't fail if Python unavailable)
+    check_and_install_python || true
 
     # Interactive TUI selection if no agents specified
     if [ "$INTERACTIVE" = true ] && [ -z "$SELECTED_AGENTS" ]; then
