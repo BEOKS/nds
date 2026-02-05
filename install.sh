@@ -220,6 +220,232 @@ check_requirements() {
 }
 
 # ============================================================================
+# Python installation and dependency management
+# ============================================================================
+PYTHON_CMD=""
+PIP_CMD=""
+SKIP_PYTHON=false
+
+detect_python() {
+    # Try python3 first, then python
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_CMD="python3"
+    elif command -v python >/dev/null 2>&1; then
+        # Check if it's Python 3
+        if python --version 2>&1 | grep -q "Python 3"; then
+            PYTHON_CMD="python"
+        fi
+    fi
+
+    if [ -n "$PYTHON_CMD" ]; then
+        # Detect pip
+        if command -v pip3 >/dev/null 2>&1; then
+            PIP_CMD="pip3"
+        elif command -v pip >/dev/null 2>&1; then
+            PIP_CMD="pip"
+        elif $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
+            PIP_CMD="$PYTHON_CMD -m pip"
+        fi
+        return 0
+    fi
+    return 1
+}
+
+get_python_version() {
+    if [ -n "$PYTHON_CMD" ]; then
+        $PYTHON_CMD --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
+    fi
+}
+
+install_python_macos() {
+    info "Attempting to install Python on macOS..."
+
+    # Check for Homebrew
+    if command -v brew >/dev/null 2>&1; then
+        info "Installing Python via Homebrew..."
+        brew install python3
+        return $?
+    fi
+
+    # Check for MacPorts
+    if command -v port >/dev/null 2>&1; then
+        info "Installing Python via MacPorts..."
+        sudo port install python311
+        return $?
+    fi
+
+    # Fallback: Download from python.org
+    warn "No package manager found. Please install Python manually:"
+    echo "  1. Visit https://www.python.org/downloads/"
+    echo "  2. Download and install Python 3.11 or later"
+    echo "  3. Re-run this installer"
+    return 1
+}
+
+install_python_linux() {
+    info "Attempting to install Python on Linux..."
+
+    # Detect package manager
+    if command -v apt-get >/dev/null 2>&1; then
+        info "Installing Python via apt..."
+        sudo apt-get update
+        sudo apt-get install -y python3 python3-pip python3-venv
+        return $?
+    elif command -v dnf >/dev/null 2>&1; then
+        info "Installing Python via dnf..."
+        sudo dnf install -y python3 python3-pip
+        return $?
+    elif command -v yum >/dev/null 2>&1; then
+        info "Installing Python via yum..."
+        sudo yum install -y python3 python3-pip
+        return $?
+    elif command -v pacman >/dev/null 2>&1; then
+        info "Installing Python via pacman..."
+        sudo pacman -S --noconfirm python python-pip
+        return $?
+    elif command -v apk >/dev/null 2>&1; then
+        info "Installing Python via apk..."
+        apk add --no-cache python3 py3-pip
+        return $?
+    elif command -v zypper >/dev/null 2>&1; then
+        info "Installing Python via zypper..."
+        sudo zypper install -y python3 python3-pip
+        return $?
+    fi
+
+    warn "Could not detect package manager. Please install Python manually."
+    return 1
+}
+
+install_python() {
+    local os_type
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Darwin)
+            install_python_macos
+            ;;
+        Linux)
+            install_python_linux
+            ;;
+        *)
+            warn "Unsupported OS: $os_type"
+            warn "Please install Python 3.8+ manually"
+            return 1
+            ;;
+    esac
+}
+
+check_and_install_python() {
+    echo ""
+    echo -e "${CYAN}================================${NC}"
+    echo -e "${CYAN}   Python Environment Setup${NC}"
+    echo -e "${CYAN}================================${NC}"
+    echo ""
+
+    if detect_python; then
+        local version
+        version=$(get_python_version)
+        success "Python found: $PYTHON_CMD (version $version)"
+
+        if [ -z "$PIP_CMD" ]; then
+            warn "pip not found. Attempting to install..."
+            $PYTHON_CMD -m ensurepip --upgrade 2>/dev/null || true
+            detect_python
+        fi
+
+        if [ -n "$PIP_CMD" ]; then
+            success "pip found: $PIP_CMD"
+        else
+            warn "pip not available. Python dependencies will not be installed."
+            return 1
+        fi
+        return 0
+    fi
+
+    warn "Python 3 not found on this system."
+    echo ""
+    echo "Python is required for many NDS skills to work properly."
+    echo ""
+    echo -n "Would you like to install Python automatically? (y/n): "
+
+    local answer
+    if [ -e /dev/tty ]; then
+        read -r answer </dev/tty
+    else
+        read -r answer
+    fi
+
+    case "$answer" in
+        [Yy]|[Yy][Ee][Ss])
+            if install_python; then
+                # Re-detect after installation
+                if detect_python; then
+                    success "Python installed successfully: $PYTHON_CMD"
+                    return 0
+                fi
+            fi
+            error "Failed to install Python"
+            return 1
+            ;;
+        *)
+            warn "Skipping Python installation"
+            SKIP_PYTHON=true
+            return 1
+            ;;
+    esac
+}
+
+install_python_dependencies() {
+    if [ "$SKIP_PYTHON" = true ] || [ -z "$PIP_CMD" ]; then
+        warn "Skipping Python dependencies installation"
+        return 0
+    fi
+
+    echo ""
+    info "Installing Python dependencies..."
+
+    # Download requirements.txt from Nexus
+    local req_url="${NEXUS_BASE_URL}/requirements.txt"
+    local req_file="${TEMP_DIR:-/tmp}/nds-requirements.txt"
+
+    if curl -fsSL "$req_url" -o "$req_file" 2>/dev/null; then
+        info "Downloaded requirements.txt from Nexus"
+    else
+        # Fallback: try GitLab
+        req_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/raw/${BRANCH}/requirements.txt"
+        if curl -fsSL "$req_url" -o "$req_file" 2>/dev/null; then
+            info "Downloaded requirements.txt from GitLab"
+        else
+            warn "Could not download requirements.txt"
+            return 1
+        fi
+    fi
+
+    # Install dependencies
+    info "Installing packages (this may take a few minutes)..."
+
+    if $PIP_CMD install --user -r "$req_file" 2>&1 | while IFS= read -r line; do
+        # Show progress for key packages
+        if echo "$line" | grep -q "Successfully installed"; then
+            echo -e "${GREEN}[OK]${NC} $line"
+        elif echo "$line" | grep -q "Requirement already satisfied"; then
+            : # Skip already installed messages
+        elif echo "$line" | grep -q "ERROR\|error"; then
+            echo -e "${RED}[ERROR]${NC} $line"
+        fi
+    done; then
+        success "Python dependencies installed successfully"
+        return 0
+    else
+        warn "Some Python dependencies may have failed to install"
+        warn "You can manually install them later with:"
+        echo "  pip install -r requirements.txt"
+        return 1
+    fi
+}
+
+# ============================================================================
 # TUI Multi-select Menu
 # ============================================================================
 show_multiselect_menu() {
@@ -808,6 +1034,9 @@ main() {
         exit 0
     fi
 
+    # Check and install Python
+    check_and_install_python
+
     # Interactive TUI selection if no agents specified
     if [ "$INTERACTIVE" = true ] && [ -z "$SELECTED_AGENTS" ]; then
         # Check if we have a TTY
@@ -900,9 +1129,12 @@ main() {
         exit 1
     fi
 
-    success "Installation complete!"
+    success "Skills installation complete!"
     echo -e "${CYAN}================================${NC}"
     echo ""
+
+    # Install Python dependencies
+    install_python_dependencies
 
     # Configure environment variables
     configure_environment_variables
@@ -911,6 +1143,9 @@ main() {
     echo "Next steps:"
     echo "  1. Restart your coding agent"
     echo "  2. Source your shell profile: source ~/.zshrc (or ~/.bashrc)"
+    if [ -n "$PYTHON_CMD" ]; then
+        echo "  3. Python dependencies have been installed for skills"
+    fi
     echo ""
 }
 
