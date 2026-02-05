@@ -593,9 +593,13 @@ function Configure-EnvironmentVariables {
         -TokenUrl "https://gitlab.gabia.com/-/profile/personal_access_tokens" `
         -IsOptional $true
 
-    # Confluence Token
+    # Confluence
     Write-Host ""
     Write-Host "[Confluence]" -ForegroundColor White
+    Prompt-EnvVar -VarName "CONFLUENCE_BASE_URL" `
+        -Description "Confluence 서버 베이스 URL (예: https://confluence.gabia.com)" `
+        -IsOptional $true
+
     Prompt-EnvVar -VarName "CONFLUENCE_API_TOKEN" `
         -Description "Confluence API 토큰" `
         -TokenUrl "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" `
@@ -621,6 +625,42 @@ function Configure-EnvironmentVariables {
     Prompt-EnvVar -VarName "FIGMA_API_KEY" `
         -Description "Figma API 키" `
         -IsOptional $true
+
+    # Sentry
+    Write-Host ""
+    Write-Host "[Sentry]" -ForegroundColor White
+    Prompt-EnvVar -VarName "SENTRY_TOKEN" `
+        -Description "Sentry Auth Token (event:read 스코프 필요)" `
+        -IsOptional $true
+
+    # Elasticsearch / Kibana
+    Write-Host ""
+    Write-Host "[Elasticsearch / Kibana]" -ForegroundColor White
+    Prompt-EnvVar -VarName "LDAP_USER" `
+        -Description "LDAP 사용자 ID (nginx Basic Auth)" `
+        -IsOptional $true
+
+    if ($script:EnvVarsAdded.ContainsKey("LDAP_USER")) {
+        Prompt-EnvVar -VarName "LDAP_PWD" `
+            -Description "LDAP 비밀번호" `
+            -IsOptional $true
+    }
+
+    # Hiworks 쪽지
+    Write-Host ""
+    Write-Host "[Hiworks 쪽지]" -ForegroundColor White
+    Prompt-EnvVar -VarName "HIWORKS_ID" `
+        -Description "Hiworks 사용자 ID (이메일의 @ 앞부분)" `
+        -IsOptional $true
+
+    if ($script:EnvVarsAdded.ContainsKey("HIWORKS_ID")) {
+        Prompt-EnvVar -VarName "HIWORKS_DOMAIN" `
+            -Description "Hiworks 도메인 (예: company.com)" `
+            -IsOptional $true
+        Prompt-EnvVar -VarName "HIWORKS_PWD" `
+            -Description "Hiworks 비밀번호" `
+            -IsOptional $true
+    }
 
     # Oracle DB
     Write-Host ""

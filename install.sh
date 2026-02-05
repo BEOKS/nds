@@ -609,9 +609,14 @@ configure_environment_variables() {
         "https://gitlab.gabia.com/-/profile/personal_access_tokens" \
         "true"
 
-    # Confluence Token
+    # Confluence
     echo ""
     echo -e "${BOLD}[Confluence]${NC}"
+    prompt_env_var "CONFLUENCE_BASE_URL" \
+        "Confluence 서버 베이스 URL (예: https://confluence.gabia.com)" \
+        "" \
+        "true"
+
     prompt_env_var "CONFLUENCE_API_TOKEN" \
         "Confluence API 토큰" \
         "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" \
@@ -639,6 +644,48 @@ configure_environment_variables() {
         "Figma API 키" \
         "" \
         "true"
+
+    # Sentry
+    echo ""
+    echo -e "${BOLD}[Sentry]${NC}"
+    prompt_env_var "SENTRY_TOKEN" \
+        "Sentry Auth Token (event:read 스코프 필요)" \
+        "" \
+        "true"
+
+    # Elasticsearch / Kibana
+    echo ""
+    echo -e "${BOLD}[Elasticsearch / Kibana]${NC}"
+    prompt_env_var "LDAP_USER" \
+        "LDAP 사용자 ID (nginx Basic Auth)" \
+        "" \
+        "true"
+
+    if printf '%s\n' "${ENV_VARS_ADDED[@]}" | grep -q "LDAP_USER"; then
+        prompt_env_var "LDAP_PWD" \
+            "LDAP 비밀번호" \
+            "" \
+            "true"
+    fi
+
+    # Hiworks 쪽지
+    echo ""
+    echo -e "${BOLD}[Hiworks 쪽지]${NC}"
+    prompt_env_var "HIWORKS_ID" \
+        "Hiworks 사용자 ID (이메일의 @ 앞부분)" \
+        "" \
+        "true"
+
+    if printf '%s\n' "${ENV_VARS_ADDED[@]}" | grep -q "HIWORKS_ID"; then
+        prompt_env_var "HIWORKS_DOMAIN" \
+            "Hiworks 도메인 (예: company.com)" \
+            "" \
+            "true"
+        prompt_env_var "HIWORKS_PWD" \
+            "Hiworks 비밀번호" \
+            "" \
+            "true"
+    fi
 
     # Oracle DB
     echo ""
