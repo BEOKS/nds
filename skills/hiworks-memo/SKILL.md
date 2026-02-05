@@ -1,13 +1,25 @@
 ---
 name: hiworks-memo
-description: Hiworks 쪽지(메모) API 클라이언트. 환경변수 기반 인증으로 쪽지 목록 조회, 상세 조회, 읽지 않은 쪽지 수 확인. 사용자가 "쪽지 확인", "쪽지 목록", "안 읽은 쪽지", "쪽지 조회", "hiworks memo" 등 요청 시 사용.
+description: Hiworks 쪽지(메모) API 클라이언트. 크롬 브라우저 세션 또는 환경변수로 인증. 쪽지 목록 조회, 상세 조회, 읽지 않은 쪽지 수 확인. 사용자가 "쪽지 확인", "쪽지 목록", "안 읽은 쪽지", "쪽지 조회", "hiworks memo" 등 요청 시 사용.
 ---
 
 # Hiworks Memo Skill
 
 Hiworks 쪽지 API를 호출하여 쪽지 목록 조회, 상세 조회, 읽지 않은 쪽지 수를 확인한다.
 
-## 환경변수 설정
+## 인증 방식
+
+### 1. 크롬 브라우저 세션 (권장)
+
+크롬 브라우저에서 hiworks.com에 로그인되어 있으면 별도 설정 없이 자동 인증됨.
+
+```bash
+pip install browser_cookie3
+```
+
+### 2. 환경변수 기반 (fallback)
+
+크롬 세션이 없거나 만료된 경우 환경변수로 인증.
 
 ```bash
 export HIWORKS_ID="user_id"           # 사용자 ID (@ 앞부분)
@@ -15,7 +27,17 @@ export HIWORKS_DOMAIN="company.com"   # 도메인
 export HIWORKS_PWD="password"         # 비밀번호
 export HIWORKS_OTP_SECRET="..."       # OTP 시크릿 (선택, TOTP 기반)
 export HIWORKS_ENV="prod"             # 환경: prod/dev/stage (기본: prod)
+````
+
+### 인증 모드 선택
+
+```bash
+export HIWORKS_AUTH_MODE="auto"       # auto (기본) | cookie | env
 ```
+
+- `auto`: 쿠키 인증 우선 시도, 실패 시 환경변수 인증
+- `cookie`: 크롬 쿠키 인증만 사용
+- `env`: 환경변수 인증만 사용
 
 ## 사용법
 
@@ -103,11 +125,21 @@ python scripts/hiworks_memo.py count
 ## 의존성
 
 ```bash
+# 크롬 세션 인증용 (권장)
+pip install browser_cookie3 requests
+
+# 환경변수 인증용 (fallback)
 pip install pyotp pycryptodome requests
 ```
 
 ## 인증 흐름
 
+### 크롬 세션 인증
+1. browser_cookie3로 크롬 쿠키 추출 (`.hiworks.com` 도메인)
+2. 쿠키를 세션에 설정하여 API 호출
+3. 세션 만료 시 "브라우저에서 다시 로그인하세요" 메시지 출력
+
+### 환경변수 인증 (fallback)
 1. `/wpf/gateway/getinfo_new`에서 `app_no` 획득 (실패 시 정적 값 사용)
 2. AES-256-CBC로 사용자 정보 암호화
 3. `/wpf/main/multi/make_key` (또는 `/make_key_otp`)로 `auth_key` 획득
@@ -115,8 +147,9 @@ pip install pyotp pycryptodome requests
 
 ## 주의사항
 
-- 환경변수가 설정되지 않으면 스크립트가 오류와 함께 종료됨
-- OTP가 필요한 계정은 `HIWORKS_OTP_SECRET` 설정 필수
+- 크롬 브라우저가 실행 중이면 쿠키 접근이 제한될 수 있음 (macOS Keychain)
+- 세션 만료 시 브라우저에서 hiworks.com 재로그인 필요
+- OTP가 필요한 계정에서 환경변수 인증 시 `HIWORKS_OTP_SECRET` 설정 필수
 - 프로덕션 환경이 기본값, 개발/스테이지 환경은 `HIWORKS_ENV`로 지정
 - `subject` 필드에 HTML 엔티티(`&gt;` 등)가 포함될 수 있으므로 `html.unescape()` 처리 필요
 - gabia.com 계열 도메인은 별도 memo API 호스트(`memo-api.gabiaoffice.hiworks.com`) 사용
