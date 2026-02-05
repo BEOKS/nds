@@ -2,12 +2,19 @@
 """
 Hiworks Memo (쪽지) API Client
 
+인증 방식 (우선순위):
+  1. 크롬 브라우저 세션 쿠키 (browser_cookie3 사용)
+     - 브라우저에서 hiworks.com에 로그인되어 있으면 자동으로 세션 사용
+  2. 환경변수 기반 인증 (fallback)
+     - HIWORKS_ID, HIWORKS_DOMAIN, HIWORKS_PWD 필요
+
 환경변수:
-  HIWORKS_ID       - 사용자 ID (이메일의 @ 앞부분)
+  HIWORKS_ID       - 사용자 ID (이메일의 @ 앞부분) [fallback용]
   HIWORKS_DOMAIN   - 도메인 (예: company.com)
-  HIWORKS_PWD      - 비밀번호
+  HIWORKS_PWD      - 비밀번호 [fallback용]
   HIWORKS_OTP_SECRET - OTP 시크릿 (선택사항, TOTP 기반)
   HIWORKS_ENV      - 환경 (prod/dev/stage, 기본값: prod)
+  HIWORKS_AUTH_MODE - 인증 모드 (cookie/env/auto, 기본값: auto)
 
 사용법:
   python hiworks_memo.py list [--type received|sent] [--filter unread|is_star|has_attach] [--limit N]
@@ -20,23 +27,219 @@ import base64
 import json
 import os
 import sys
-from typing import Optional
+import webbrowser
+from typing import Optional, Union
 from urllib.parse import urlencode
 
-import pyotp
 import requests
 import urllib3
-from Crypto.Cipher import AES
 
 # SSL 경고 비활성화 (사내 인증서)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-from Crypto.Util.Padding import pad, unpad
+
+# 선택적 의존성
+try:
+    import browser_cookie3
+    HAS_BROWSER_COOKIE3 = True
+except ImportError:
+    HAS_BROWSER_COOKIE3 = False
+
+try:
+    import pyotp
+    HAS_PYOTP = True
+except ImportError:
+    HAS_PYOTP = False
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad, unpad
+    HAS_PYCRYPTODOME = True
+except ImportError:
+    HAS_PYCRYPTODOME = False
+
+
+class HiworksCookieAuth:
+    """크롬 브라우저 쿠키 기반 Hiworks 인증"""
+
+    # 쿠키에서 추출할 도메인 목록
+    COOKIE_DOMAINS = [
+        ".hiworks.com",
+        "hiworks.com",
+        "office.hiworks.com",
+        ".office.hiworks.com",
+    ]
+
+    # 도메인별 호스트 설정
+    HOSTS = {
+        "prod": {
+            "messenger": "https://messenger.hiworks.com",
+            "memo": "https://memo-api.office.hiworks.com",
+        },
+        "dev": {
+            "messenger": "https://dev-messenger.hiworks.com",
+            "memo": "https://memo-api.devoffice.hiworks.com",
+        },
+        "stage": {
+            "messenger": "https://stage-messenger.hiworks.com",
+            "memo": "https://memo-api.stageoffice.hiworks.com",
+        },
+    }
+
+    GABIA_DOMAINS = {"gabia.com", "devapproval.com", "devapproval.shop"}
+    GABIA_HOSTS = {
+        "prod": {
+            "messenger": "https://messenger.hiworks.com",
+            "memo": "https://memo-api.gabiaoffice.hiworks.com",
+        },
+        "dev": {
+            "messenger": "https://dev-messenger.hiworks.com",
+            "memo": "https://memo-api.gabiaoffice.hiworks.com",
+        },
+        "stage": {
+            "messenger": "https://stage-messenger.hiworks.com",
+            "memo": "https://memo-api.gabiaoffice.hiworks.com",
+        },
+    }
+
+    def __init__(self, domain: Optional[str] = None, env: str = "prod"):
+        self.domain = domain
+        self.env = env
+        self.auth_key: Optional[str] = None
+        self.office_no: Optional[str] = None
+        self.basic_info_no: Optional[str] = None
+        self.session = requests.Session()
+        self.session.verify = False
+
+        # 도메인에 따라 호스트 선택
+        if domain and domain in self.GABIA_DOMAINS:
+            self.hosts = self.GABIA_HOSTS.get(env, self.GABIA_HOSTS["prod"])
+        else:
+            self.hosts = self.HOSTS.get(env, self.HOSTS["prod"])
+
+    def _get_chrome_cookies(self) -> dict:
+        """크롬 브라우저에서 hiworks.com 쿠키 추출"""
+        if not HAS_BROWSER_COOKIE3:
+            raise RuntimeError("browser_cookie3가 설치되지 않음: pip install browser_cookie3")
+
+        cookies = {}
+        try:
+            cj = browser_cookie3.chrome(domain_name=".hiworks.com")
+            for cookie in cj:
+                cookies[cookie.name] = cookie.value
+        except Exception as e:
+            print(f"Warning: Chrome 쿠키 추출 실패 - {e}", file=sys.stderr)
+
+        return cookies
+
+    def _extract_auth_from_cookies(self, cookies: dict) -> bool:
+        """쿠키에서 인증 정보 추출
+
+        hiworks에서 사용하는 주요 쿠키:
+        - h_officeid: 도메인 정보 (예: gabia.com)
+        - OFFICE_SSO_TOKEN: SSO 토큰 (이걸로 auth_key 획득 가능)
+        - hiworks_access_token: 액세스 토큰
+        - HWENC: 암호화된 세션 정보
+        """
+        # h_officeid 쿠키에서 도메인 자동 감지
+        office_id = cookies.get("h_officeid")
+        if office_id and not self.domain:
+            self.domain = office_id
+            # 도메인에 따라 호스트 재설정
+            if self.domain in self.GABIA_DOMAINS:
+                self.hosts = self.GABIA_HOSTS.get(self.env, self.GABIA_HOSTS["prod"])
+
+        # 쿠키를 세션에 설정
+        for name, value in cookies.items():
+            self.session.cookies.set(name, value, domain=".hiworks.com")
+
+        # SSO 토큰이 있으면 auth_key로 교환 시도
+        sso_token = cookies.get("OFFICE_SSO_TOKEN")
+        if sso_token:
+            try:
+                return self._exchange_sso_token(sso_token)
+            except Exception as e:
+                print(f"Warning: SSO 토큰 교환 실패 - {e}", file=sys.stderr)
+
+        # 직접 API 호출로 세션 유효성 검증
+        return self._validate_session_with_api()
+
+    def _exchange_sso_token(self, sso_token: str) -> bool:
+        """SSO 토큰으로 auth_key 획득"""
+        # SSO 토큰을 사용해 사용자 정보 조회
+        response = self.session.get(
+            f"{self.hosts['messenger']}/messenger/user/info",
+            headers={"Authorization": f"Bearer {sso_token}"},
+        )
+
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                if "auth_key" in data:
+                    self.auth_key = data["auth_key"]
+                    self.office_no = data.get("office_no")
+                    self.basic_info_no = data.get("basic_info_no", self.office_no)
+                    return True
+            except json.JSONDecodeError:
+                pass
+
+        return False
+
+    def _validate_session_with_api(self) -> bool:
+        """쿠키 세션으로 직접 API 호출하여 유효성 검증
+
+        쿠키 기반 인증에서는 Authorization 헤더 대신 쿠키를 사용
+        """
+        try:
+            # 쪽지 수 조회 API로 세션 유효성 테스트
+            response = self.session.get(
+                f"{self.hosts['memo']}/memo/count",
+            )
+
+            if response.status_code == 200:
+                # 쿠키 세션이 유효함 - auth_key 없이 쿠키로 인증
+                return True
+            elif response.status_code == 401:
+                print("Error: 브라우저 세션이 만료됨. 브라우저에서 다시 로그인하세요.", file=sys.stderr)
+                return False
+            else:
+                return False
+
+        except Exception as e:
+            print(f"Warning: 세션 검증 실패 - {e}", file=sys.stderr)
+            return False
+
+    def login(self) -> bool:
+        """크롬 쿠키로 로그인 시도"""
+        cookies = self._get_chrome_cookies()
+
+        if not cookies:
+            print("Error: 크롬에서 hiworks.com 쿠키를 찾을 수 없음", file=sys.stderr)
+            print("Hint: 크롬 브라우저에서 hiworks.com에 로그인하세요", file=sys.stderr)
+            return False
+
+        return self._extract_auth_from_cookies(cookies)
+
+    def get_auth_headers(self) -> dict:
+        """인증 헤더 반환
+
+        쿠키 기반 인증에서는 세션 쿠키가 자동으로 전송됨
+        auth_key가 있으면 기존 방식대로 Authorization 헤더 사용
+        """
+        if self.auth_key:
+            return {
+                "Authorization": f"Messenger {self.auth_key}",
+                "X-Office-No": str(self.basic_info_no) if self.basic_info_no else "",
+            }
+        # 쿠키 기반 인증에서는 빈 헤더 반환 (쿠키가 자동 전송됨)
+        return {}
 
 
 class HiworksCrypto:
     """AES-256-CBC 암호화/복호화"""
 
     def __init__(self, app_no: str):
+        if not HAS_PYCRYPTODOME:
+            raise RuntimeError("pycryptodome가 설치되지 않음: pip install pycryptodome")
         # AES-256: 32바이트 키 필요 (app_no를 두 번 반복)
         self.key = (app_no + app_no).encode("utf-8")[:32]
 
@@ -165,6 +368,8 @@ class HiworksAuth:
         """TOTP 코드 생성"""
         if not self.otp_secret:
             return ""
+        if not HAS_PYOTP:
+            raise RuntimeError("pyotp가 설치되지 않음: pip install pyotp")
         totp = pyotp.TOTP(self.otp_secret)
         return totp.now()
 
@@ -261,7 +466,7 @@ class HiworksAuth:
 class HiworksMemo:
     """Hiworks 쪽지 API 클라이언트"""
 
-    def __init__(self, auth: HiworksAuth):
+    def __init__(self, auth: Union[HiworksAuth, HiworksCookieAuth]):
         self.auth = auth
         self.base_url = auth.hosts["memo"]
         self.session = auth.session
@@ -331,6 +536,64 @@ def get_env_or_error(name: str) -> str:
     return value
 
 
+def try_cookie_auth(domain: Optional[str], env: str) -> Optional[HiworksCookieAuth]:
+    """크롬 쿠키 기반 인증 시도"""
+    if not HAS_BROWSER_COOKIE3:
+        return None
+
+    auth = HiworksCookieAuth(domain=domain, env=env)
+    try:
+        if auth.login():
+            print("Info: 크롬 브라우저 세션으로 인증됨", file=sys.stderr)
+            return auth
+    except Exception as e:
+        print(f"Warning: 쿠키 인증 실패 - {e}", file=sys.stderr)
+
+    return None
+
+
+def try_env_auth(env: str) -> Optional[HiworksAuth]:
+    """환경변수 기반 인증 시도"""
+    user_id = os.environ.get("HIWORKS_ID")
+    domain = os.environ.get("HIWORKS_DOMAIN")
+    password = os.environ.get("HIWORKS_PWD")
+    otp_secret = os.environ.get("HIWORKS_OTP_SECRET")
+
+    if not all([user_id, domain, password]):
+        return None
+
+    if not HAS_PYCRYPTODOME:
+        print("Warning: 환경변수 인증에 pycryptodome 필요: pip install pycryptodome", file=sys.stderr)
+        return None
+
+    auth = HiworksAuth(user_id, domain, password, otp_secret, env)
+    try:
+        if auth.login():
+            print("Info: 환경변수 기반 인증됨", file=sys.stderr)
+            return auth
+    except Exception as e:
+        print(f"Warning: 환경변수 인증 실패 - {e}", file=sys.stderr)
+
+    return None
+
+
+GABIA_DOMAINS = {"gabia.com", "devapproval.com", "devapproval.shop"}
+
+
+def open_login_page(domain: Optional[str] = None) -> None:
+    """브라우저에서 하이웍스 로그인 페이지 열기"""
+    if domain and domain in GABIA_DOMAINS:
+        login_url = f"https://login.gabiaoffice.hiworks.com/{domain}"
+    elif domain:
+        login_url = f"https://login.office.hiworks.com/{domain}"
+    else:
+        login_url = "https://office.hiworks.com"
+
+    print(f"브라우저에서 로그인 페이지를 엽니다: {login_url}", file=sys.stderr)
+    print("로그인 완료 후 다시 명령어를 실행하세요.", file=sys.stderr)
+    webbrowser.open(login_url)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Hiworks 쪽지 API 클라이언트")
     subparsers = parser.add_subparsers(dest="command", help="명령어")
@@ -365,17 +628,42 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # 환경변수에서 인증 정보 조회
-    user_id = get_env_or_error("HIWORKS_ID")
-    domain = get_env_or_error("HIWORKS_DOMAIN")
-    password = get_env_or_error("HIWORKS_PWD")
-    otp_secret = os.environ.get("HIWORKS_OTP_SECRET")
+    # 환경변수 조회
+    domain = os.environ.get("HIWORKS_DOMAIN")
     env = os.environ.get("HIWORKS_ENV", "prod")
+    auth_mode = os.environ.get("HIWORKS_AUTH_MODE", "auto")  # cookie, env, auto
 
-    # 인증
-    auth = HiworksAuth(user_id, domain, password, otp_secret, env)
-    if not auth.login():
-        sys.exit(1)
+    auth = None
+
+    # 인증 방식 선택
+    if auth_mode == "cookie":
+        # 쿠키 인증만 사용
+        auth = try_cookie_auth(domain, env)
+        if not auth:
+            print("Error: 쿠키 인증 실패 - 세션이 만료되었습니다.", file=sys.stderr)
+            open_login_page(domain)
+            sys.exit(1)
+
+    elif auth_mode == "env":
+        # 환경변수 인증만 사용
+        auth = try_env_auth(env)
+        if not auth:
+            print("Error: 환경변수 인증 실패. HIWORKS_ID, HIWORKS_DOMAIN, HIWORKS_PWD를 설정하세요.", file=sys.stderr)
+            sys.exit(1)
+
+    else:  # auto (기본값)
+        # 1. 먼저 쿠키 인증 시도
+        auth = try_cookie_auth(domain, env)
+
+        # 2. 실패하면 환경변수 인증 시도
+        if not auth:
+            auth = try_env_auth(env)
+
+        # 3. 둘 다 실패 → 로그인 페이지 열기
+        if not auth:
+            print("Error: 인증 실패 - 세션이 만료되었거나 로그인이 필요합니다.", file=sys.stderr)
+            open_login_page(domain)
+            sys.exit(1)
 
     # 쪽지 API 클라이언트
     memo = HiworksMemo(auth)
