@@ -134,10 +134,19 @@ class HiworksCookieAuth:
         """쿠키에서 인증 정보 추출
 
         hiworks에서 사용하는 주요 쿠키:
+        - h_officeid: 도메인 정보 (예: gabia.com)
         - OFFICE_SSO_TOKEN: SSO 토큰 (이걸로 auth_key 획득 가능)
         - hiworks_access_token: 액세스 토큰
         - HWENC: 암호화된 세션 정보
         """
+        # h_officeid 쿠키에서 도메인 자동 감지
+        office_id = cookies.get("h_officeid")
+        if office_id and not self.domain:
+            self.domain = office_id
+            # 도메인에 따라 호스트 재설정
+            if self.domain in self.GABIA_DOMAINS:
+                self.hosts = self.GABIA_HOSTS.get(self.env, self.GABIA_HOSTS["prod"])
+
         # 쿠키를 세션에 설정
         for name, value in cookies.items():
             self.session.cookies.set(name, value, domain=".hiworks.com")
