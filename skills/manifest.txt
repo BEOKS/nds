@@ -3,6 +3,7 @@ board-resolver
 brand-guidelines
 canvas-design
 code-simplifier
+cve-scan
 dev-plan
 divide-conquer-tasks
 doc-coauthoring
@@ -16,10 +17,12 @@ gabia-dev-mcp-mattermost
 gabia-dev-mcp-memory
 gabia-dev-mcp-mysql
 gabia-dev-mcp-oracle
+hiworks-mail
 hiworks-memo
 internal-comms
 mac-cron
 mcp-builder
+obsidian-writer
 pdf
 pptx
 skill-creator
