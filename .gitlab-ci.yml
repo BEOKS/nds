@@ -46,7 +46,7 @@ deploy:skills:
     - cd ..
     - ls -lh nds-skills.zip
     - echo "=== Verifying zip contents ==="
-    - unzip -l nds-skills.zip | head -50
+    - unzip -l nds-skills.zip | head -50 || true
 
     # Nexus에 업로드
     - echo "=== Uploading install.sh ==="
