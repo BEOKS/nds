@@ -24,11 +24,12 @@ deploy:skills:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
+        - .gitlab-ci.yml
         - skills/**/*
+        - skills/manifest.txt
         - install.sh
         - install.ps1
         - requirements.txt
-        - skills/manifest.txt
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
       allow_failure: true
