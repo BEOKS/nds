@@ -5,7 +5,6 @@ canvas-design
 code-simplifier
 cve-scan
 dev-plan
-divide-conquer-tasks
 doc-coauthoring
 docx
 frontend-design
