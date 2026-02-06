@@ -24,11 +24,12 @@ deploy:skills:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
+        - .gitlab-ci.yml
         - skills/**/*
+        - skills/manifest.txt
         - install.sh
         - install.ps1
         - requirements.txt
-        - skills/manifest.txt
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
       allow_failure: true
@@ -51,6 +52,8 @@ deploy:skills:
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file install.ps1 "${NDS_NEXUS_URL}/install.ps1"
     - echo "=== Uploading requirements.txt ==="
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file requirements.txt "${NDS_NEXUS_URL}/requirements.txt"
+    - echo "=== Uploading manifest.txt ==="
+    - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file skills/manifest.txt "${NDS_NEXUS_URL}/manifest.txt"
     - echo "=== Uploading nds-skills.zip ==="
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file nds-skills.zip "${NDS_NEXUS_URL}/nds-skills.zip"
 
