@@ -709,11 +709,13 @@ download_all_skills() {
         skill=$(echo "$skill" | tr -d '[:space:]')
 
         local src_skill_dir="${extracted_dir}/${skill}"
+        local src_skill_dir_alt="${TEMP_DIR}/${skill}"
         local src_skill_file="${extracted_dir}/${skill}.skill"
+        local src_skill_file_alt="${TEMP_DIR}/${skill}.skill"
         local dest_skill_dir="${target_dir}/${skill}"
         local dest_skill_file="${target_dir}/${skill}.skill"
 
-        # Check for directory-based skill
+        # Check for directory-based skill (primary location)
         if [ -d "$src_skill_dir" ]; then
             rm -rf "$dest_skill_dir"
             cp -R "$src_skill_dir" "$dest_skill_dir"
@@ -723,9 +725,24 @@ download_all_skills() {
 
             success "Installed: $skill"
             installed=$((installed + 1))
-        # Check for .skill file
+        # Check for directory-based skill (alternate root location)
+        elif [ -d "$src_skill_dir_alt" ]; then
+            rm -rf "$dest_skill_dir"
+            cp -R "$src_skill_dir_alt" "$dest_skill_dir"
+
+            # Remove __pycache__ directories
+            find "$dest_skill_dir" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+            success "Installed: $skill"
+            installed=$((installed + 1))
+        # Check for .skill file (primary location)
         elif [ -f "$src_skill_file" ]; then
             cp "$src_skill_file" "$dest_skill_file"
+            success "Installed: ${skill}.skill"
+            installed=$((installed + 1))
+        # Check for .skill file (alternate root location)
+        elif [ -f "$src_skill_file_alt" ]; then
+            cp "$src_skill_file_alt" "$dest_skill_file"
             success "Installed: ${skill}.skill"
             installed=$((installed + 1))
         else
