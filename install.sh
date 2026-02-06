@@ -400,7 +400,7 @@ check_and_install_python() {
 }
 
 install_python_dependencies() {
-    if [ "$SKIP_PYTHON" = true ] || [ -z "$PIP_CMD" ]; then
+    if [ "$SKIP_PYTHON" = true ]; then
         warn "Skipping Python dependencies installation"
         return 0
     fi
@@ -428,18 +428,35 @@ install_python_dependencies() {
     # Install dependencies
     info "Installing packages (this may take a few minutes)..."
 
-    # Use temp file to capture pip output and exit code properly
     local pip_log="${TEMP_DIR:-/tmp}/nds-pip-install.log"
     local pip_exit_code=0
 
-    $PIP_CMD install --user -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
+    # Try uv first (fastest, handles externally-managed-environment)
+    if command -v uv &> /dev/null; then
+        info "Using uv for installation..."
+        uv pip install --system --break-system-packages -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
+    elif [ -n "$PIP_CMD" ]; then
+        info "Using pip for installation..."
+        # Try with --break-system-packages first (pip 23.0+, needed for PEP 668)
+        if $PIP_CMD install --user --break-system-packages -r "$req_file" > "$pip_log" 2>&1; then
+            pip_exit_code=0
+        else
+            # Fallback: try without --break-system-packages (older pip or non-PEP668 systems)
+            info "Retrying without --break-system-packages..."
+            $PIP_CMD install --user -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
+        fi
+    else
+        warn "No package manager found (uv or pip)."
+        warn "Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        return 1
+    fi
 
     # Show relevant output
     if [ -f "$pip_log" ]; then
         while IFS= read -r line; do
-            if echo "$line" | grep -q "Successfully installed"; then
+            if echo "$line" | grep -qiE "installed|Installed"; then
                 echo -e "${GREEN}[OK]${NC} $line"
-            elif echo "$line" | grep -q "ERROR\|error"; then
+            elif echo "$line" | grep -qi "error"; then
                 echo -e "${RED}[ERROR]${NC} $line"
             fi
         done < "$pip_log"
@@ -451,8 +468,14 @@ install_python_dependencies() {
         return 0
     else
         warn "Some Python dependencies may have failed to install (exit code: $pip_exit_code)"
-        warn "You can manually install them later with:"
-        echo "  pip install -r requirements.txt"
+        warn "You can manually install them later:"
+        echo ""
+        echo "  # Option 1: Install uv (recommended)"
+        echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+        echo "  uv pip install --system --break-system-packages -r requirements.txt"
+        echo ""
+        echo "  # Option 2: Use pip directly"
+        echo "  pip install --user --break-system-packages -r requirements.txt"
         return 1
     fi
 }
