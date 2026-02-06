@@ -40,10 +40,13 @@ deploy:skills:
 
     # skills 디렉토리를 zip으로 패키징
     - echo "=== Packaging nds-skills.zip ==="
+    - rm -f nds-skills.zip
     - cd skills
-    - zip -r ../nds-skills.zip . -x "__pycache__/*" "*.pyc" ".DS_Store"
+    - zip -r ../nds-skills.zip . -x "__pycache__/*" "*.pyc" ".DS_Store" "*.git*"
     - cd ..
     - ls -lh nds-skills.zip
+    - echo "=== Verifying zip contents ==="
+    - unzip -l nds-skills.zip | head -50
 
     # Nexus에 업로드
     - echo "=== Uploading install.sh ==="
