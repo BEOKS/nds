@@ -17,3 +17,17 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Python
+__pycache__/
+*.pyc
+
+# OMC
+.omc/
+
+# Skills test/temp
+*.skill
+**/test/
+
+# Environment
+.env
