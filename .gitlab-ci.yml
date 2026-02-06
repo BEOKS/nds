@@ -38,7 +38,7 @@ deploy:skills:
     - set -euo pipefail
     - apk add --no-cache zip curl
 
-    # skills 디렉토리를 zip으로 패키징 (기존 파일 완전 삭제 후 재생성)
+    # skills 디렉토리를 zip으로 패키징
     - echo "=== Packaging nds-skills.zip ==="
     - rm -f nds-skills.zip
     - cd skills
