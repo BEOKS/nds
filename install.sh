@@ -623,9 +623,9 @@ show_multiselect_menu() {
 # Get available skills list
 # ============================================================================
 get_skills_list() {
-    local manifest_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/raw/${BRANCH}/skills/manifest.txt"
+    local manifest_url="${NEXUS_BASE_URL}/manifest.txt"
 
-    # Try to fetch manifest (only if response looks like a skill list, not HTML)
+    # Try to fetch manifest from Nexus
     local manifest
     manifest=$(curl -fsSL "$manifest_url" 2>/dev/null || echo "")
 
