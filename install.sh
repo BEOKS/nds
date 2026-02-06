@@ -855,17 +855,10 @@ configure_environment_variables() {
         "" \
         "true"
 
-    prompt_env_var "CONFLUENCE_API_TOKEN" \
-        "Confluence API 토큰" \
+    prompt_env_var "ATLASSIAN_OAUTH_ACCESS_TOKEN" \
+        "Confluence 개인용 액세스 토큰 (Bearer 인증)" \
         "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" \
         "true"
-
-    if [ -z "${CONFLUENCE_USERNAME:-}" ]; then
-        prompt_env_var "CONFLUENCE_USERNAME" \
-            "Confluence 사용자명 (API 토큰과 함께 사용)" \
-            "" \
-            "true"
-    fi
 
     # Mattermost Token
     echo ""
