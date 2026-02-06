@@ -683,15 +683,6 @@ download_all_skills() {
     # Extract zip file
     unzip -q "$archive_file" -d "$TEMP_DIR"
 
-    # Find the skills directory
-    local extracted_dir
-    extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type d -name "skills" | head -1)
-
-    if [ -z "$extracted_dir" ] || [ ! -d "$extracted_dir" ]; then
-        error "Skills directory not found in archive"
-        return 1
-    fi
-
     # Determine which skills to install
     local skills_to_install
     if [ -n "$SELECTED_SKILLS" ]; then
@@ -708,14 +699,12 @@ download_all_skills() {
         [ -z "$skill" ] && continue
         skill=$(echo "$skill" | tr -d '[:space:]')
 
-        local src_skill_dir="${extracted_dir}/${skill}"
-        local src_skill_dir_alt="${TEMP_DIR}/${skill}"
-        local src_skill_file="${extracted_dir}/${skill}.skill"
-        local src_skill_file_alt="${TEMP_DIR}/${skill}.skill"
+        local src_skill_dir="${TEMP_DIR}/${skill}"
+        local src_skill_file="${TEMP_DIR}/${skill}.skill"
         local dest_skill_dir="${target_dir}/${skill}"
         local dest_skill_file="${target_dir}/${skill}.skill"
 
-        # Check for directory-based skill (primary location)
+        # Check for directory-based skill
         if [ -d "$src_skill_dir" ]; then
             rm -rf "$dest_skill_dir"
             cp -R "$src_skill_dir" "$dest_skill_dir"
@@ -725,24 +714,9 @@ download_all_skills() {
 
             success "Installed: $skill"
             installed=$((installed + 1))
-        # Check for directory-based skill (alternate root location)
-        elif [ -d "$src_skill_dir_alt" ]; then
-            rm -rf "$dest_skill_dir"
-            cp -R "$src_skill_dir_alt" "$dest_skill_dir"
-
-            # Remove __pycache__ directories
-            find "$dest_skill_dir" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-
-            success "Installed: $skill"
-            installed=$((installed + 1))
-        # Check for .skill file (primary location)
+        # Check for .skill file
         elif [ -f "$src_skill_file" ]; then
             cp "$src_skill_file" "$dest_skill_file"
-            success "Installed: ${skill}.skill"
-            installed=$((installed + 1))
-        # Check for .skill file (alternate root location)
-        elif [ -f "$src_skill_file_alt" ]; then
-            cp "$src_skill_file_alt" "$dest_skill_file"
             success "Installed: ${skill}.skill"
             installed=$((installed + 1))
         else
