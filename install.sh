@@ -635,40 +635,10 @@ get_skills_list() {
         return 0
     fi
 
-    # Fallback: hardcoded list
-    cat << 'SKILLS_LIST'
-algorithmic-art
-board-resolver
-brand-guidelines
-canvas-design
-code-simplifier
-dev-plan
-divide-conquer-tasks
-doc-coauthoring
-docx
-frontend-design
-gabia-dev-mcp-confluence
-gabia-dev-mcp-figma
-gabia-dev-mcp-gitlab-issues
-gabia-dev-mcp-gitlab-merge-requests
-gabia-dev-mcp-mattermost
-gabia-dev-mcp-memory
-gabia-dev-mcp-mysql
-gabia-dev-mcp-oracle
-hiworks-memo
-internal-comms
-mac-cron
-mcp-builder
-pdf
-pptx
-skill-creator
-slack-gif-creator
-theme-factory
-web-artifacts-builder
-webapp-testing
-work-logger
-xlsx
-SKILLS_LIST
+    # No fallback - manifest.txt must be available from Nexus
+    error "Failed to download manifest.txt from Nexus"
+    error "Please check your network connection or contact the administrator"
+    return 1
 }
 
 # ============================================================================
