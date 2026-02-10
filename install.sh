@@ -465,7 +465,6 @@ install_python_dependencies() {
 
     if [ $pip_exit_code -eq 0 ]; then
         success "Python dependencies installed successfully"
-        return 0
     else
         warn "Some Python dependencies may have failed to install (exit code: $pip_exit_code)"
         warn "You can manually install them later:"
@@ -478,6 +477,40 @@ install_python_dependencies() {
         echo "  pip install --user --break-system-packages -r requirements.txt"
         return 1
     fi
+
+    # Install optional dependencies (non-fatal)
+    local opt_req_url="${NEXUS_BASE_URL}/requirements-optional.txt"
+    local opt_req_file="${TEMP_DIR:-/tmp}/nds-requirements-optional.txt"
+    local opt_downloaded=false
+
+    if curl -fsSL "$opt_req_url" -o "$opt_req_file" 2>/dev/null; then
+        opt_downloaded=true
+    else
+        opt_req_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/raw/${BRANCH}/requirements-optional.txt"
+        if curl -fsSL "$opt_req_url" -o "$opt_req_file" 2>/dev/null; then
+            opt_downloaded=true
+        fi
+    fi
+
+    if [ "$opt_downloaded" = true ]; then
+        info "Installing optional dependencies (mcp, anthropic)..."
+        local opt_log="${TEMP_DIR:-/tmp}/nds-pip-optional.log"
+        if command -v uv &> /dev/null; then
+            uv pip install --system --break-system-packages -r "$opt_req_file" > "$opt_log" 2>&1 || true
+        elif [ -n "$PIP_CMD" ]; then
+            $PIP_CMD install --user --break-system-packages -r "$opt_req_file" > "$opt_log" 2>&1 || \
+            $PIP_CMD install --user -r "$opt_req_file" > "$opt_log" 2>&1 || true
+        fi
+        if grep -qi "error" "$opt_log" 2>/dev/null; then
+            warn "Optional dependencies (mcp, anthropic) could not be installed."
+            warn "These are only needed for the mcp-builder skill (requires Python 3.10+)."
+        else
+            success "Optional dependencies installed"
+        fi
+        rm -f "$opt_log"
+    fi
+
+    return 0
 }
 
 # ============================================================================
