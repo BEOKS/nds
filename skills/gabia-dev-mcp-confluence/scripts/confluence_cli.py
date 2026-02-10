@@ -3,6 +3,7 @@ import argparse
 import base64
 import json
 import os
+import mimetypes
 import re
 import sys
 import unicodedata
@@ -72,6 +73,43 @@ def _http_json(method: str, url: str, *, params: dict | None = None, body: dict 
         raise SystemExit(f"[ERROR] Confluence API error: {e.code} {e.reason}\n{err_body}") from None
     except urllib.error.URLError as e:
         raise SystemExit(f"[ERROR] Network error: {e}") from None
+
+
+def _http_upload(url: str, file_path: str, filename: str) -> dict:
+    """Upload a file via multipart/form-data."""
+    boundary = "----ConfluenceCLIUploadBoundary"
+
+    content_type, _ = mimetypes.guess_type(filename)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    with open(file_path, "rb") as f:
+        file_data = f.read()
+
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n"
+        f"\r\n"
+    ).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    headers = {
+        "Authorization": _build_auth_header(),
+        "X-Atlassian-Token": "nocheck",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
+
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            raw = resp.read()
+            return json.loads(raw.decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"[ERROR] Upload failed: {e.code} {e.reason}\n{err_body}") from None
+    except urllib.error.URLError as e:
+        raise SystemExit(f"[ERROR] Network error during upload: {e}") from None
 
 
 def wrap_simple_query_to_cql(query: str) -> str:
@@ -729,6 +767,39 @@ def cmd_download(args: argparse.Namespace) -> None:
     print(json.dumps({"success": True, "downloaded": downloaded}, ensure_ascii=False))
 
 
+def cmd_upload(args: argparse.Namespace) -> None:
+    """Upload attachment(s) to a Confluence page."""
+    base_url = _require_env("CONFLUENCE_BASE_URL").rstrip("/")
+
+    if not args.page_id:
+        raise SystemExit("[ERROR] Provide --page-id.")
+    if not args.file:
+        raise SystemExit("[ERROR] Provide at least one --file.")
+
+    page_id = _resolve_page_id(args.page_id)
+    url = f"{base_url}/rest/api/content/{page_id}/child/attachment"
+
+    uploaded: list[dict] = []
+    for file_path in args.file:
+        if not os.path.isfile(file_path):
+            print(json.dumps({"error": f"File not found: {file_path}"}), file=sys.stderr)
+            continue
+
+        filename = os.path.basename(file_path)
+        result = _http_upload(url, file_path, filename)
+
+        results = result.get("results") or [result]
+        for att in results:
+            uploaded.append({
+                "id": att.get("id"),
+                "title": att.get("title"),
+                "filename": filename,
+                "filePath": file_path,
+            })
+
+    print(json.dumps({"success": True, "uploaded": uploaded}, ensure_ascii=False))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Confluence CLI (no MCP required)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -808,6 +879,11 @@ def build_parser() -> argparse.ArgumentParser:
     dl.add_argument("--output-dir", "-o", default=".", help="Directory to save downloaded files")
     dl.add_argument("--overwrite", action="store_true", default=False, help="Overwrite existing files")
     dl.set_defaults(func=cmd_download)
+
+    ul = sub.add_parser("upload", help="Upload attachment(s) to a Confluence page")
+    ul.add_argument("--page-id", required=True, help="Page ID or Confluence URL")
+    ul.add_argument("--file", action="append", required=True, help="File path to upload (repeatable)")
+    ul.set_defaults(func=cmd_upload)
 
     return p
 
