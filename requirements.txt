@@ -34,9 +34,6 @@ pycryptodome>=3.19.0
 # YAML Processing
 PyYAML>=6.0.0
 
-# Markdown Processing
-markitdown>=0.0.1
-
 # Utilities
 six>=1.16.0
 
