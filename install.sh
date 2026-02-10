@@ -1014,6 +1014,11 @@ save_environment_variables() {
 
     case "$choice" in
         1)
+            # Remove existing NDS block if present
+            if grep -q "# NDS Skills Environment Variables" "$shell_profile" 2>/dev/null; then
+                sed -i.bak '/# NDS Skills Environment Variables/,/^$/d' "$shell_profile"
+                rm -f "${shell_profile}.bak"
+            fi
             echo "" >> "$shell_profile"
             echo "# NDS Skills Environment Variables (added by installer)" >> "$shell_profile"
             for var in "${ENV_VARS_ADDED[@]}"; do
