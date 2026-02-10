@@ -13,6 +13,7 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 - **댓글 조회/추가/수정/삭제**
 - 첨부파일 목록 조회
 - 첨부파일 다운로드 (개별 또는 전체)
+- **첨부파일 업로드** (개별 또는 다중)
 - Markdown ↔ Confluence storage HTML(간이 변환)
 - **URL에서 page-id 자동 추출** (`--page-id`에 Confluence URL을 그대로 전달 가능)
 
@@ -144,6 +145,20 @@ python3 scripts/confluence_cli.py download \
   --page-id 123456789 \
   --output-dir ./attachments \
   --overwrite
+
+# 첨부파일 업로드 (단일)
+python3 scripts/confluence_cli.py upload --page-id 123456789 --file ./image.png
+
+# 첨부파일 업로드 (다중)
+python3 scripts/confluence_cli.py upload \
+  --page-id 123456789 \
+  --file ./img1.png \
+  --file ./img2.png
+
+# Confluence URL 사용
+python3 scripts/confluence_cli.py upload \
+  --page-id "https://confluence.gabia.com/spaces/DEV/pages/123456/제목" \
+  --file ./document.pdf
 ```
 
 ## 주의사항
