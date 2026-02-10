@@ -115,7 +115,9 @@ def _http_json(
                         "해결책: 1) 다른 Figma API 토큰 사용  2) Dev/Full 좌석 업그레이드  3) 시간 후 재시도"
                     ) from None
                 retries += 1
-                print(f"[WARN] Rate limit hit. Waiting {retry_after}s... ({retries}/{max_retries})", file=sys.stderr)
+                rate_type = e.headers.get("X-Figma-Rate-Limit-Type", "unknown")
+                plan_tier = e.headers.get("X-Figma-Plan-Tier", "unknown")
+                print(f"[WARN] Rate limit hit (seat: {rate_type}, plan: {plan_tier}). Waiting {retry_after}s... ({retries}/{max_retries})", file=sys.stderr)
                 time.sleep(retry_after)
                 continue
             err_body = e.read().decode("utf-8", errors="replace")
@@ -141,7 +143,9 @@ def _download_bytes(url: str, *, max_retries: int = 3) -> bytes:
                         "해결책: 1) 다른 Figma API 토큰 사용  2) Dev/Full 좌석 업그레이드  3) 시간 후 재시도"
                     ) from None
                 retries += 1
-                print(f"[WARN] Rate limit on download. Waiting {retry_after}s... ({retries}/{max_retries})", file=sys.stderr)
+                rate_type = e.headers.get("X-Figma-Rate-Limit-Type", "unknown")
+                plan_tier = e.headers.get("X-Figma-Plan-Tier", "unknown")
+                print(f"[WARN] Rate limit on download (seat: {rate_type}, plan: {plan_tier}). Waiting {retry_after}s... ({retries}/{max_retries})", file=sys.stderr)
                 time.sleep(retry_after)
                 continue
             err_body = e.read().decode("utf-8", errors="replace")
@@ -287,10 +291,27 @@ def cmd_export(args: argparse.Namespace) -> None:
     api_depth = args.max_depth + 2
 
     # 1. 프레임 목록 수집
-    print("[INFO] Fetching Figma file structure...", file=sys.stderr)
-
-    # --single 모드: 지정한 node-id 자체를 1장으로 렌더링
-    if args.single and args.node_id:
+    # --frames-json: 캐시된 프레임 목록 사용 (파일 구조 API 호출 건너뛰기)
+    if args.frames_json:
+        frames_path = Path(args.frames_json).expanduser().resolve()
+        if not frames_path.exists():
+            raise SystemExit(f"[ERROR] Frames JSON not found: {frames_path}")
+        cached = json.loads(frames_path.read_text(encoding="utf-8"))
+        cached_frames = cached.get("frames", []) if isinstance(cached, dict) else cached
+        frames: list[FrameInfo] = [
+            FrameInfo(
+                node_id=f["node_id"],
+                name=f["name"],
+                width=f.get("width", 0),
+                height=f.get("height", 0),
+                parent_name=f.get("parent"),
+            )
+            for f in cached_frames
+        ]
+        file_name = cached.get("file_name", "Figma Document") if isinstance(cached, dict) else "Figma Document"
+        print(f"[INFO] Loaded {len(frames)} frames from cache: {frames_path}", file=sys.stderr)
+    elif args.single and args.node_id:
+        print("[INFO] Fetching Figma file structure...", file=sys.stderr)
         data = _http_json("GET", f"{base}/files/{args.file_key}/nodes", params={"ids": args.node_id, "depth": 1})
         nodes = data.get("nodes", {}) if isinstance(data, dict) else {}
         frames: list[FrameInfo] = []
@@ -309,6 +330,7 @@ def cmd_export(args: argparse.Namespace) -> None:
                 )
         file_name = frames[0].name if frames else "Figma Document"
     elif args.node_id:
+        print("[INFO] Fetching Figma file structure...", file=sys.stderr)
         data = _http_json("GET", f"{base}/files/{args.file_key}/nodes", params={"ids": args.node_id, "depth": api_depth})
         nodes = data.get("nodes", {}) if isinstance(data, dict) else {}
         frames = []
@@ -317,6 +339,7 @@ def cmd_export(args: argparse.Namespace) -> None:
                 frames.extend(_collect_frames(node_data["document"], max_depth=args.max_depth))
         file_name = "Figma Document"
     else:
+        print("[INFO] Fetching Figma file structure...", file=sys.stderr)
         data = _http_json("GET", f"{base}/files/{args.file_key}", params={"depth": api_depth})
         doc = data.get("document", {}) if isinstance(data, dict) else {}
         file_name = data.get("name", "Figma Document") if isinstance(data, dict) else "Figma Document"
@@ -336,11 +359,13 @@ def cmd_export(args: argparse.Namespace) -> None:
     print("[INFO] Requesting image renders...", file=sys.stderr)
 
     # Figma API는 한 번에 많은 노드를 처리할 수 없으므로 배치로 나눔
-    batch_size = 50
+    batch_size = args.batch_size
     all_urls: dict[str, str] = {}
 
-    for i in range(0, len(node_ids), batch_size):
+    total_batches = (len(node_ids) + batch_size - 1) // batch_size
+    for batch_idx, i in enumerate(range(0, len(node_ids), batch_size)):
         batch = node_ids[i : i + batch_size]
+        print(f"[INFO] Rendering batch {batch_idx + 1}/{total_batches} ({len(batch)} frames)...", file=sys.stderr)
         resp = _http_json(
             "GET",
             f"{base}/images/{args.file_key}",
@@ -352,12 +377,17 @@ def cmd_export(args: argparse.Namespace) -> None:
                 all_urls.update(images)
         if i + batch_size < len(node_ids):
             delay = getattr(args, 'delay', 12)
-            print(f"[INFO] Waiting {delay}s for rate limit...", file=sys.stderr)
+            remaining_batches = total_batches - batch_idx - 1
+            eta_seconds = remaining_batches * delay
+            print(f"[INFO] Waiting {delay}s for rate limit... (ETA: ~{eta_seconds}s remaining)", file=sys.stderr)
             time.sleep(delay)  # Rate limit 방지 (View/Collab: 5/min → 12s 간격)
 
     # 3. 이미지 다운로드 (리사이징 포함)
-    print("[INFO] Downloading images...", file=sys.stderr)
+    print(f"[INFO] Downloading {len(frames)} images...", file=sys.stderr)
     frame_images: dict[str, str] = {}  # node_id -> image_filename
+    skipped = 0
+    downloaded = 0
+    download_start = time.time()
 
     # 리사이징 설정
     max_image_size = MODEL_MAX_IMAGE_SIZE.get(args.model, MODEL_MAX_IMAGE_SIZE["default"]) if args.resize else None
@@ -378,6 +408,12 @@ def cmd_export(args: argparse.Namespace) -> None:
         img_filename = f"{idx + 1:03d}_{safe_name}.png"
         img_path = images_dir / img_filename
 
+        # Resume: 이미 다운로드된 이미지 건너뛰기
+        if args.resume and img_path.exists() and img_path.stat().st_size > 0:
+            frame_images[frame.node_id] = img_filename
+            skipped += 1
+            continue
+
         try:
             img_data = _download_bytes(url)
 
@@ -387,9 +423,20 @@ def cmd_export(args: argparse.Namespace) -> None:
 
             img_path.write_bytes(img_data)
             frame_images[frame.node_id] = img_filename
-            print(f"  [{idx + 1}/{len(frames)}] {frame.name}", file=sys.stderr)
+            downloaded += 1
+
+            # 진행률 + ETA
+            elapsed = time.time() - download_start
+            avg = elapsed / downloaded
+            remaining = len(frames) - (idx + 1)
+            eta = int(avg * remaining)
+            eta_str = f"{eta // 60}m{eta % 60:02d}s" if eta >= 60 else f"{eta}s"
+            print(f"  [{idx + 1}/{len(frames)}] {frame.name} (ETA ~{eta_str})", file=sys.stderr)
         except SystemExit as e:
             print(f"[WARN] Failed to download {frame.name}: {e}", file=sys.stderr)
+
+    if skipped > 0:
+        print(f"[INFO] Skipped {skipped} already downloaded images (--resume)", file=sys.stderr)
 
     # 4. Markdown 문서 생성
     print("[INFO] Generating Markdown document...", file=sys.stderr)
@@ -523,6 +570,123 @@ def cmd_describe(args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def cmd_build(args: argparse.Namespace) -> None:
+    """수동 내보내기한 이미지 폴더로 Markdown 문서 생성."""
+    images_dir = Path(args.images_dir).expanduser().resolve()
+    if not images_dir.is_dir():
+        raise SystemExit(f"[ERROR] Images directory not found: {images_dir}")
+
+    # 이미지 파일 수집 (PNG, JPG, JPEG, WEBP)
+    image_exts = {".png", ".jpg", ".jpeg", ".webp"}
+    image_files = sorted(
+        [f for f in images_dir.iterdir() if f.suffix.lower() in image_exts],
+        key=lambda f: f.name,
+    )
+
+    if not image_files:
+        raise SystemExit(f"[ERROR] No images found in: {images_dir}")
+
+    print(f"[INFO] Found {len(image_files)} images in {images_dir}", file=sys.stderr)
+
+    # 출력 디렉토리 결정
+    output_dir = Path(args.output).expanduser().resolve() if args.output else images_dir.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 이미지를 output/images/로 복사 (필요 시 리사이징)
+    out_images_dir = output_dir / "images"
+    out_images_dir.mkdir(parents=True, exist_ok=True)
+
+    max_image_size = MODEL_MAX_IMAGE_SIZE.get(args.model, MODEL_MAX_IMAGE_SIZE["default"]) if args.resize else None
+    if max_image_size and not HAS_PILLOW:
+        print("[WARN] --resize requires Pillow. Install with: pip install Pillow", file=sys.stderr)
+        max_image_size = None
+
+    processed_images: list[tuple[str, str]] = []  # (display_name, filename)
+    for idx, img_file in enumerate(image_files):
+        # 파일명에서 표시 이름 추출 (확장자 제거, 번호 prefix 제거)
+        stem = img_file.stem
+        display_name = re.sub(r"^\d+[_\-.\s]*", "", stem) or stem
+        display_name = display_name.replace("_", " ").strip()
+
+        # 정렬된 파일명으로 복사
+        out_filename = f"{idx + 1:03d}_{_sanitize_filename(display_name)}{img_file.suffix.lower()}"
+        out_path = out_images_dir / out_filename
+
+        if img_file.parent.resolve() == out_images_dir.resolve() and img_file.name == out_filename:
+            # 이미 같은 위치에 같은 이름이면 스킵
+            pass
+        else:
+            img_data = img_file.read_bytes()
+            if max_image_size:
+                img_data = _resize_image(img_data, max_image_size)
+            out_path.write_bytes(img_data)
+
+        processed_images.append((display_name, out_filename))
+        print(f"  [{idx + 1}/{len(image_files)}] {display_name}", file=sys.stderr)
+
+    # Markdown 문서 생성
+    print("[INFO] Generating Markdown document...", file=sys.stderr)
+    doc_title = args.title or images_dir.name
+    md_lines: list[str] = [
+        f"# {doc_title}",
+        "",
+        f"> Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "",
+        "---",
+        "",
+        "## Table of Contents",
+        "",
+    ]
+
+    # TOC
+    for idx, (name, _) in enumerate(processed_images):
+        anchor = f"frame-{idx + 1}"
+        md_lines.append(f"- [{name}](#{anchor})")
+
+    md_lines.extend(["", "---", ""])
+
+    # 프레임 섹션
+    for idx, (name, filename) in enumerate(processed_images):
+        anchor = f"frame-{idx + 1}"
+        md_lines.extend(
+            [
+                f"### {name} {{#{anchor}}}",
+                "",
+                f"![{name}](images/{filename})",
+                "",
+            ]
+        )
+
+        # AI 설명 플레이스홀더 (기본 활성화)
+        if not args.no_description:
+            md_lines.extend(
+                [
+                    "#### Description",
+                    "",
+                    "<!-- AI_DESCRIPTION_START -->",
+                    "_Description will be generated by AI._",
+                    "<!-- AI_DESCRIPTION_END -->",
+                    "",
+                ]
+            )
+
+        md_lines.append("---")
+        md_lines.append("")
+
+    md_filename = _sanitize_filename(doc_title) + ".md"
+    md_path = output_dir / md_filename
+    md_path.write_text("\n".join(md_lines), encoding="utf-8")
+
+    result = {
+        "success": True,
+        "output_dir": str(output_dir),
+        "markdown_file": str(md_path),
+        "images_dir": str(out_images_dir),
+        "image_count": len(processed_images),
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Figma 프레임을 이미지로 추출하여 Markdown 문서 생성",
@@ -574,7 +738,45 @@ def build_parser() -> argparse.ArgumentParser:
         default=12,
         help="배치 요청 간 딜레이 초 (기본값: 12, View좌석은 5회/분 제한)",
     )
+    ex.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+        help="렌더 요청 배치 크기 (기본값: 500, 한 번에 전체 요청하여 API 호출 최소화)",
+    )
+    ex.add_argument(
+        "--resume",
+        action="store_true",
+        help="이미 다운로드된 이미지 건너뛰기 (중단 후 재시작 시 사용)",
+    )
+    ex.add_argument(
+        "--frames-json",
+        help="캐시된 프레임 목록 JSON 파일 경로 (파일 구조 API 호출 건너뛰기)",
+    )
     ex.set_defaults(func=cmd_export)
+
+    # build 명령 (수동 내보내기 이미지 → Markdown)
+    bd = sub.add_parser("build", help="수동 내보내기한 이미지 폴더로 Markdown 문서 생성")
+    bd.add_argument("--images-dir", required=True, help="이미지 폴더 경로")
+    bd.add_argument("--output", help="출력 디렉토리 (기본값: 이미지 폴더 상위)")
+    bd.add_argument("--title", help="문서 제목 (기본값: 폴더명)")
+    bd.add_argument(
+        "--resize",
+        action="store_true",
+        help="AI 모델 입력 크기에 맞게 이미지 리사이징",
+    )
+    bd.add_argument(
+        "--model",
+        choices=["claude", "gpt4", "gemini"],
+        default="claude",
+        help="리사이징 기준 모델 (기본값: claude)",
+    )
+    bd.add_argument(
+        "--no-description",
+        action="store_true",
+        help="AI 설명 플레이스홀더 생략",
+    )
+    bd.set_defaults(func=cmd_build)
 
     # describe 명령
     desc = sub.add_parser("describe", help="Markdown 파일의 이미지/플레이스홀더 정보 추출")
