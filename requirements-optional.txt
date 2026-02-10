@@ -1,0 +1,5 @@
+# Optional dependencies - installed separately, failures are non-fatal
+
+# MCP & AI (for mcp-builder skill, requires Python 3.10+)
+anthropic>=0.39.0
+mcp>=1.1.0
