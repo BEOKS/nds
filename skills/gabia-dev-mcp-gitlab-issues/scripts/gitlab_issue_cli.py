@@ -311,6 +311,40 @@ def cmd_delete_link(args: argparse.Namespace) -> None:
     print(json.dumps({"message": "Issue link deleted successfully"}, ensure_ascii=False))
 
 
+def cmd_list_milestones(args: argparse.Namespace) -> None:
+    base = _api_base()
+    project = _encode_project_id(args.project_id)
+
+    params: list[tuple[str, str]] = []
+
+    def add(name: str, value: object | None):
+        if value is None:
+            return
+        params.append((name, str(value)))
+
+    for iid in args.iids or []:
+        params.append(("iids[]", str(iid)))
+    add("state", args.state)
+    add("title", args.title)
+    add("search", args.search)
+    if args.include_parent_milestones is not None:
+        add("include_parent_milestones", str(bool(args.include_parent_milestones)).lower())
+    add("page", args.page)
+    add("per_page", args.per_page)
+
+    raw, headers = _http("GET", f"{base}/projects/{project}/milestones", params=params or None)
+    items = _json(raw)
+    out = {"items": items, "pagination": _pagination(headers)}
+    print(json.dumps(out, ensure_ascii=False))
+
+
+def cmd_get_milestone(args: argparse.Namespace) -> None:
+    base = _api_base()
+    project = _encode_project_id(args.project_id)
+    raw, _ = _http("GET", f"{base}/projects/{project}/milestones/{args.milestone_id}")
+    print(json.dumps(_json(raw), ensure_ascii=False))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="GitLab Issues CLI (no MCP required)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -429,6 +463,22 @@ def build_parser() -> argparse.ArgumentParser:
     dl.add_argument("--issue-iid", required=True)
     dl.add_argument("--issue-link-id", required=True)
     dl.set_defaults(func=cmd_delete_link)
+
+    lm = sub.add_parser("list-milestones", help="List project milestones")
+    lm.add_argument("--project-id", required=True)
+    lm.add_argument("--iids", type=int, action="append", help="Filter by milestone IIDs")
+    lm.add_argument("--state", choices=["active", "closed"])
+    lm.add_argument("--title")
+    lm.add_argument("--search")
+    lm.add_argument("--include-parent-milestones", action=argparse.BooleanOptionalAction, default=None)
+    lm.add_argument("--page", type=int)
+    lm.add_argument("--per-page", type=int)
+    lm.set_defaults(func=cmd_list_milestones)
+
+    gm = sub.add_parser("get-milestone", help="Get a milestone by ID")
+    gm.add_argument("--project-id", required=True)
+    gm.add_argument("--milestone-id", required=True)
+    gm.set_defaults(func=cmd_get_milestone)
 
     return p
 
