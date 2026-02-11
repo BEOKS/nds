@@ -1,6 +1,6 @@
 ---
 name: gabia-dev-mcp-gitlab-issues
-description: GitLab REST API를 직접 호출해 이슈 생성/조회/수정/삭제, 토론 조회, 스레드 노트 추가/수정, 이슈 링크 관리를 자동화할 때 사용한다. MCP가 없어도 scripts/gitlab_issue_cli.py로 수행한다.
+description: GitLab REST API를 직접 호출해 이슈 생성/조회/수정/삭제, 토론 조회, 스레드 노트 추가/수정, 이슈 링크 관리, 마일스톤 조회를 자동화할 때 사용한다. MCP가 없어도 scripts/gitlab_issue_cli.py로 수행한다.
 ---
 
 # GitLab Issues Automation
@@ -11,6 +11,7 @@ description: GitLab REST API를 직접 호출해 이슈 생성/조회/수정/삭
 - 이슈 토론(Discussion) 조회
 - 토론 스레드 note 추가/수정
 - 이슈 링크 조회/생성/삭제
+- 마일스톤 목록 조회/상세 조회
 
 ## 사전 조건(환경변수)
 
@@ -25,6 +26,7 @@ description: GitLab REST API를 직접 호출해 이슈 생성/조회/수정/삭
 4. 토론 확인은 `discussions`를 사용합니다.
 5. note는 “기존 discussion(thread)”에만 붙일 수 있으므로 `create-note`/`update-note` 전에 discussion_id/note_id를 먼저 확보합니다.
 6. 이슈 관계는 `list-links` / `create-link` / `delete-link`로 관리합니다.
+7. 마일스톤은 `list-milestones`로 목록 조회, `get-milestone`으로 상세 조회합니다.
 
 ## 도구별 사용 팁
 
@@ -80,4 +82,20 @@ python3 scripts/gitlab_issue_cli.py create-note \
   --issue-iid 456 \
   --discussion-id DISCUSSION_ID_FROM_LIST \
   --body '확인했습니다. 재현 로그를 첨부합니다.'
+```
+
+### 마일스톤 목록 조회
+
+```bash
+python3 scripts/gitlab_issue_cli.py list-milestones \
+  --project-id group/project \
+  --state active
+```
+
+### 마일스톤 상세 조회
+
+```bash
+python3 scripts/gitlab_issue_cli.py get-milestone \
+  --project-id group/project \
+  --milestone-id 10
 ```

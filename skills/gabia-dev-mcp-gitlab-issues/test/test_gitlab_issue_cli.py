@@ -608,6 +608,96 @@ class TestCmdLinks:
         assert "issues/30/links/100" in mock_http.call_args[0][1]
 
 
+class TestCmdMilestones:
+    """마일스톤 명령어 테스트"""
+
+    @patch("gitlab_issue_cli._http")
+    @patch("builtins.print")
+    def test_cmd_list_milestones_minimal(self, mock_print, mock_http):
+        """최소 옵션으로 마일스톤 목록 조회"""
+        mock_http.return_value = (b'[{"id": 1, "title": "v1.0"}]', {"x-total": "1"})
+
+        args = MagicMock(
+            project_id="myproject",
+            iids=None,
+            state=None,
+            title=None,
+            search=None,
+            include_parent_milestones=None,
+            page=None,
+            per_page=None,
+        )
+        gitlab_issue_cli.cmd_list_milestones(args)
+
+        assert "projects/myproject/milestones" in mock_http.call_args[0][1]
+        mock_print.assert_called_once()
+
+    @patch("gitlab_issue_cli._http")
+    @patch("builtins.print")
+    def test_cmd_list_milestones_with_filters(self, mock_print, mock_http):
+        """필터 옵션으로 마일스톤 목록 조회"""
+        mock_http.return_value = (b'[{"id": 1}]', {"x-total": "1"})
+
+        args = MagicMock(
+            project_id="group/project",
+            iids=[1, 2],
+            state="active",
+            title=None,
+            search="release",
+            include_parent_milestones=True,
+            page=1,
+            per_page=10,
+        )
+        gitlab_issue_cli.cmd_list_milestones(args)
+
+        params = mock_http.call_args[1]["params"]
+        assert ("iids[]", "1") in params
+        assert ("iids[]", "2") in params
+        assert ("state", "active") in params
+        assert ("search", "release") in params
+        assert ("include_parent_milestones", "true") in params
+        assert ("page", "1") in params
+        assert ("per_page", "10") in params
+
+    @patch("gitlab_issue_cli._http")
+    @patch("builtins.print")
+    def test_cmd_get_milestone(self, mock_print, mock_http):
+        """마일스톤 상세 조회"""
+        mock_http.return_value = (b'{"id": 5, "title": "v2.0", "state": "active"}', {})
+
+        args = MagicMock(project_id="myproject", milestone_id="5")
+        gitlab_issue_cli.cmd_get_milestone(args)
+
+        assert "projects/myproject/milestones/5" in mock_http.call_args[0][1]
+        mock_print.assert_called_once()
+
+    @patch("gitlab_issue_cli._http")
+    @patch("builtins.print")
+    def test_cmd_list_milestones_pagination(self, mock_print, mock_http):
+        """마일스톤 목록 조회 시 페이지네이션 정보 포함"""
+        mock_http.return_value = (
+            b'[{"id": 1}]',
+            {"x-page": "1", "x-per-page": "20", "x-total": "50", "x-total-pages": "3"},
+        )
+
+        args = MagicMock(
+            project_id="myproject",
+            iids=None,
+            state=None,
+            title=None,
+            search=None,
+            include_parent_milestones=None,
+            page=None,
+            per_page=None,
+        )
+        gitlab_issue_cli.cmd_list_milestones(args)
+
+        output = json.loads(mock_print.call_args[0][0])
+        assert "items" in output
+        assert "pagination" in output
+        assert output["pagination"]["total"] == 50
+
+
 class TestBuildParser:
     """argparse 파서 테스트"""
 
