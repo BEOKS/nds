@@ -4,6 +4,7 @@
 # macOS DMG + Windows MSI 설치파일을 빌드하고 GitHub Releases에 업로드합니다.
 #
 # 필수 GitHub Secrets:
+#   - GH_PAT                  : Private 서브모듈 접근용 PAT (repo 스코프)
 #   - TAURI_PRIVATE_KEY       : Tauri Updater 서명 개인키 (tag 릴리스 시)
 #   - TAURI_KEY_PASSWORD      : 개인키 패스워드 (tag 릴리스 시)
 #   - OPENWORK_UPDATER_PUBKEY : Updater 서명 검증용 공개키 (tag 릴리스 시)
@@ -35,6 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ secrets.GH_PAT }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -133,6 +135,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ secrets.GH_PAT }}
           fetch-depth: 0
 
       - name: Setup Node.js
