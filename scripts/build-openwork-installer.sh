@@ -159,6 +159,55 @@ bundles_remove() {
   echo "$bundles_csv" | tr ',' '\n' | grep -v "^${remove}$" | paste -sd, - | sed 's/^,$//; s/,$//'
 }
 
+bun_version_satisfies() {
+  local required="$1"
+  local current="$2"
+  # ^major.minor.patch: same major, current >= required
+  node -e '
+    const r = process.argv[1].split(".").map(Number);
+    const c = process.argv[2].split(".").map(Number);
+    const ok = c[0] === r[0] && (c[1] > r[1] || (c[1] === r[1] && c[2] >= r[2]));
+    process.exit(ok ? 0 : 1);
+  ' "$required" "$current" 2>/dev/null
+}
+
+ensure_bun_version() {
+  local pkg_json="$1"
+  if [[ ! -f "$pkg_json" ]]; then
+    return 0
+  fi
+
+  local required
+  required="$(node -e '
+    const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const pm = p.packageManager || "";
+    if (pm.startsWith("bun@")) process.stdout.write(pm.split("@")[1]);
+  ' "$pkg_json" 2>/dev/null || true)"
+
+  if [[ -z "$required" ]]; then
+    return 0
+  fi
+
+  local current
+  current="$(bun --version 2>/dev/null || echo "0.0.0")"
+
+  if bun_version_satisfies "$required" "$current"; then
+    return 0
+  fi
+
+  echo -e "${YELLOW}bun 버전 불일치: v${current} → ^${required} 필요. 업그레이드 중...${NC}"
+  curl -fsSL https://bun.sh/install | bash -s "bun-v${required}" >/dev/null 2>&1 || true
+  export PATH="$HOME/.bun/bin:$PATH"
+
+  current="$(bun --version 2>/dev/null || echo "0.0.0")"
+  if ! bun_version_satisfies "$required" "$current"; then
+    echo -e "${RED}오류: bun ^${required} 설치에 실패했습니다 (현재: v${current}).${NC}"
+    echo -e "${YELLOW}힌트: curl -fsSL https://bun.sh/install | bash${NC}"
+    exit 1
+  fi
+  echo -e "${GREEN}bun v${current} 설치 완료${NC}"
+}
+
 if [[ ! -d "$OPENWORK_DIR" || ! -d "$OPENCODE_DIR" ]]; then
   echo -e "${RED}오류: submodule(openwork/opencode) 디렉토리를 찾을 수 없습니다.${NC}"
   echo -e "${YELLOW}힌트: git submodule update --init --recursive${NC}"
@@ -191,12 +240,14 @@ echo "타겟: $TARGET"
 echo "번들: $BUNDLES"
 echo ""
 
-need_cmd bun
 need_cmd pnpm
 need_cmd node
 need_cmd cargo
 
 if [[ -z "$OPENCODE_BIN" ]]; then
+  need_cmd bun
+  ensure_bun_version "$OPENCODE_DIR/package.json"
+
   if [[ "$TARGET" != "$host_target" ]]; then
     echo -e "${RED}오류: 현재 머신($host_target)과 다른 타겟($TARGET)으로 opencode를 자동 빌드할 수 없습니다.${NC}"
     echo -e "${YELLOW}해결: --opencode-bin으로 해당 타겟 바이너리를 직접 지정하세요.${NC}"

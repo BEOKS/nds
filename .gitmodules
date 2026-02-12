@@ -1,6 +1,6 @@
 [submodule "openwork"]
 	path = openwork
-	url = ../gabiawork.git
+	url = https://github.com/different-ai/openwork
 [submodule "opencode"]
 	path = opencode
-	url = ../gabiacode.git
+	url = https://github.com/anomalyco/opencode

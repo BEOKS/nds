@@ -49,8 +49,16 @@ jobs:
         with:
           version: latest
 
+      - name: Detect required bun version
+        id: bun-version
+        run: |
+          version=$(node -p 'JSON.parse(require("fs").readFileSync("opencode/package.json","utf8")).packageManager?.split("@")[1] || "latest"')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ steps.bun-version.outputs.version }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -148,8 +156,17 @@ jobs:
         with:
           version: latest
 
+      - name: Detect required bun version
+        id: bun-version-win
+        shell: bash
+        run: |
+          version=$(node -p 'JSON.parse(require("fs").readFileSync("opencode/package.json","utf8")).packageManager?.split("@")[1] || "latest"')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ steps.bun-version-win.outputs.version }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
