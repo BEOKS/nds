@@ -1,0 +1,281 @@
+# OpenWork Release Pipeline (GitHub Actions)
+#
+# master 브랜치 push 시 pre-release, tag(v*) push 시 정식 릴리스를 생성합니다.
+# macOS DMG + Windows MSI 설치파일을 빌드하고 GitHub Releases에 업로드합니다.
+#
+# 필수 GitHub Secrets:
+#   - TAURI_PRIVATE_KEY       : Tauri Updater 서명 개인키 (tag 릴리스 시)
+#   - TAURI_KEY_PASSWORD      : 개인키 패스워드 (tag 릴리스 시)
+#   - OPENWORK_UPDATER_PUBKEY : Updater 서명 검증용 공개키 (tag 릴리스 시)
+
+name: Release OpenWork
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ──────────────────────────────────────────────
+  # macOS DMG 빌드
+  # ──────────────────────────────────────────────
+  build-macos:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            openwork/packages/desktop/src-tauri/target/
+          key: macos-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: macos-cargo-
+
+      - name: Build macOS DMG
+        env:
+          TAURI_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_PRIVATE_KEY || '' }}
+          TAURI_KEY_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_KEY_PASSWORD || '' }}
+          OPENWORK_UPDATER_PUBKEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.OPENWORK_UPDATER_PUBKEY || '' }}
+        run: |
+          set -euo pipefail
+
+          BUILD_ARGS="--dmg-skip-jenkins --no-frozen-lockfile"
+
+          # tag 릴리스 시에만 updater artifacts 포함
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            BUILD_ARGS="$BUILD_ARGS --with-updater-artifacts"
+            if [[ -n "$OPENWORK_UPDATER_PUBKEY" ]]; then
+              BUILD_ARGS="$BUILD_ARGS --updater-pubkey $OPENWORK_UPDATER_PUBKEY"
+            fi
+          fi
+
+          ./scripts/build-openwork-installer.sh $BUILD_ARGS
+
+      - name: Collect build artifacts
+        id: collect
+        run: |
+          set -euo pipefail
+
+          arch="$(uname -m)"
+          if [[ "$arch" == "arm64" ]]; then
+            target="aarch64-apple-darwin"
+          else
+            target="x86_64-apple-darwin"
+          fi
+
+          bundle_dir="./openwork/packages/desktop/src-tauri/target/$target/release/bundle"
+          staging="./artifacts-macos"
+          mkdir -p "$staging"
+
+          # DMG 파일 수집
+          find "$bundle_dir" -name "*.dmg" -exec cp {} "$staging/" \; 2>/dev/null || true
+
+          # Updater 산출물 수집 (tag 릴리스 시)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            find "$bundle_dir" -name "*.tar.gz" -exec cp {} "$staging/" \; 2>/dev/null || true
+            find "$bundle_dir" -name "*.tar.gz.sig" -exec cp {} "$staging/" \; 2>/dev/null || true
+          fi
+
+          echo "artifact_dir=$staging" >> "$GITHUB_OUTPUT"
+          echo "=== Collected artifacts ==="
+          ls -lh "$staging/"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwork-macos
+          path: ./artifacts-macos/*
+          retention-days: 7
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────
+  # Windows MSI 빌드
+  # ──────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            openwork/packages/desktop/src-tauri/target/
+          key: windows-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: windows-cargo-
+
+      - name: Build Windows MSI
+        env:
+          TAURI_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_PRIVATE_KEY || '' }}
+          TAURI_KEY_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_KEY_PASSWORD || '' }}
+          OPENWORK_UPDATER_PUBKEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.OPENWORK_UPDATER_PUBKEY || '' }}
+        shell: pwsh
+        run: |
+          $buildArgs = @{
+            NoFrozenLockfile = $true
+          }
+
+          # tag 릴리스 시에만 updater artifacts 포함
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $buildArgs["WithUpdaterArtifacts"] = $true
+            if ($env:OPENWORK_UPDATER_PUBKEY) {
+              $buildArgs["UpdaterPubkey"] = $env:OPENWORK_UPDATER_PUBKEY
+            }
+          }
+
+          & .\scripts\build-openwork-installer.ps1 @buildArgs
+
+      - name: Collect build artifacts
+        id: collect
+        shell: pwsh
+        run: |
+          $target = "x86_64-pc-windows-msvc"
+          $bundleDir = ".\openwork\packages\desktop\src-tauri\target\$target\release\bundle"
+          $staging = ".\artifacts-windows"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+
+          # MSI/EXE 설치파일 수집
+          Get-ChildItem -Path $bundleDir -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in @(".msi", ".exe") } |
+            ForEach-Object { Copy-Item $_.FullName -Destination $staging }
+
+          # Updater 산출물 수집 (tag 릴리스 시)
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            Get-ChildItem -Path $bundleDir -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Extension -in @(".sig") -or $_.Name -like "*.msi.zip" -or $_.Name -like "*.nsis.zip" } |
+              ForEach-Object { Copy-Item $_.FullName -Destination $staging }
+          }
+
+          Write-Host "=== Collected artifacts ==="
+          Get-ChildItem -Path $staging | Format-Table Name, Length
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwork-windows
+          path: ./artifacts-windows/*
+          retention-days: 7
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────
+  # GitHub Release 생성 및 업로드
+  # ──────────────────────────────────────────────
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: openwork-macos
+          path: ./release-assets/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: openwork-windows
+          path: ./release-assets/
+
+      - name: List release assets
+        run: |
+          echo "=== Release assets ==="
+          ls -lhR ./release-assets/
+
+      - name: Determine release info
+        id: release-info
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "name=OpenWork $TAG" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            TAG="dev-latest"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "name=OpenWork dev (build #${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Delete existing dev-latest release
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: gh release delete dev-latest --cleanup-tag --yes 2>/dev/null || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-info.outputs.tag }}
+          name: ${{ steps.release-info.outputs.name }}
+          prerelease: ${{ steps.release-info.outputs.prerelease }}
+          generate_release_notes: true
+          files: ./release-assets/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
