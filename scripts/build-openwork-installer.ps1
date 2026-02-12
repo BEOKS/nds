@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 <#
   build-openwork-installer.ps1 - 로컬 opencode + openwork를 빌드해 Windows 설치 파일(MSI 등)을 생성합니다.
 
@@ -18,6 +16,8 @@ param(
   [string]$UpdaterPubkeyFile = "",
   [switch]$NoFrozenLockfile
 )
+
+$ErrorActionPreference = "Stop"
 
 function Die($Message) {
   Write-Host "오류: $Message" -ForegroundColor Red
