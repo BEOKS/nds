@@ -38,6 +38,12 @@ deploy:skills:
     - set -euo pipefail
     - apk add --no-cache zip curl
 
+    # manifest.txt 자동 생성 (skills/ 하위 디렉토리 목록)
+    - echo "=== Generating manifest.txt ==="
+    - ls -d skills/*/ | sed 's|skills/||;s|/$||' | sort > skills/manifest.txt
+    - echo "Generated manifest.txt with $(wc -l < skills/manifest.txt) skills"
+    - cat skills/manifest.txt
+
     # skills 디렉토리를 zip으로 패키징
     - echo "=== Packaging nds-skills.zip ==="
     - rm -f nds-skills.zip
