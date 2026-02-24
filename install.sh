@@ -873,7 +873,7 @@ configure_environment_variables() {
         "true"
 
     prompt_env_var "ATLASSIAN_OAUTH_ACCESS_TOKEN" \
-        "Confluence 개인용 액세스 토큰 (Bearer 인증)" \
+        "Confluence 개인용 액세스 토큰 (Bearer 인증). confluence.gabia.com 사용 시 https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action 에서 발급한 토큰을 입력하세요." \
         "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" \
         "true"
 

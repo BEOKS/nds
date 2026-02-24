@@ -840,17 +840,10 @@ function Configure-EnvironmentVariables {
         -Description "Confluence 서버 베이스 URL (예: https://confluence.gabia.com)" `
         -IsOptional $true
 
-    Prompt-EnvVar -VarName "CONFLUENCE_API_TOKEN" `
-        -Description "Confluence API 토큰" `
+    Prompt-EnvVar -VarName "ATLASSIAN_OAUTH_ACCESS_TOKEN" `
+        -Description "Confluence 개인용 액세스 토큰 (Bearer 인증). confluence.gabia.com 사용 시 https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action 에서 발급한 토큰을 입력하세요." `
         -TokenUrl "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" `
         -IsOptional $true
-
-    $confToken = [Environment]::GetEnvironmentVariable("CONFLUENCE_USERNAME", "User")
-    if (-not $confToken) {
-        Prompt-EnvVar -VarName "CONFLUENCE_USERNAME" `
-            -Description "Confluence 사용자명 (API 토큰과 함께 사용)" `
-            -IsOptional $true
-    }
 
     # Mattermost Token
     Write-Host ""
