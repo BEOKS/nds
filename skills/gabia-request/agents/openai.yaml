@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gabia Request"
+  short_description: "gabiarequest 템플릿/라벨 규칙 기반 이슈 등록"
+  default_prompt: "Use $gabia-request to create a devops/gabiarequest issue with template and initial labels."
