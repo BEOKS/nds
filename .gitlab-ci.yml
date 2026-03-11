@@ -83,13 +83,13 @@ deploy:marketplace:
   stage: marketplace
   needs: ["deploy:skills"]
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NDS_NPM_TOKEN && $NEXUS_USERNAME && $NEXUS_PASSWORD
       changes:
         - .gitlab-ci.yml
         - skills/**/*
         - plugins/**/*
         - .claude-plugin/**/*
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NDS_NPM_TOKEN && $NEXUS_USERNAME && $NEXUS_PASSWORD
       when: manual
       allow_failure: true
   image: node:20-alpine
@@ -97,6 +97,15 @@ deploy:marketplace:
     - apk add --no-cache curl jq zip
   script:
     - set -euo pipefail
+    - |
+      missing=""
+      [ -n "${NDS_NPM_TOKEN:-}" ] || missing="$missing NDS_NPM_TOKEN"
+      [ -n "${NEXUS_USERNAME:-}" ] || missing="$missing NEXUS_USERNAME"
+      [ -n "${NEXUS_PASSWORD:-}" ] || missing="$missing NEXUS_PASSWORD"
+      if [ -n "$missing" ]; then
+        echo "Skipping marketplace deploy. Missing CI variables:$missing"
+        exit 0
+      fi
 
     # --- 버전 결정 (태그 → 태그 버전, 그 외 → package.json 버전) ---
     - |
