@@ -234,11 +234,72 @@ class TestMarkdownToStorage(unittest.TestCase):
         self.assertIn("<code>code</code>", result)
 
     def test_converts_code_block(self):
-        """정상 케이스: 코드 블록 변환"""
+        """정상 케이스: 코드 블록 변환 (언어 미지정)"""
         markdown = "```\ncode block\n```"
         result = confluence_cli.markdown_to_storage(markdown)
-        self.assertIn("<pre><code>", result)
-        self.assertIn("</code></pre>", result)
+        self.assertIn('<ac:structured-macro ac:name="code" ac:schema-version="1">', result)
+        self.assertIn("<![CDATA[code block]]>", result)
+        self.assertIn("</ac:structured-macro>", result)
+        self.assertNotIn('<ac:parameter ac:name="language">', result)
+
+    def test_converts_code_block_with_language(self):
+        """정상 케이스: 언어 지정 코드 블록 변환"""
+        markdown = "```python\nprint('hello')\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('<ac:structured-macro ac:name="code" ac:schema-version="1">', result)
+        self.assertIn('<ac:parameter ac:name="language">python</ac:parameter>', result)
+        self.assertIn("<![CDATA[print('hello')]]>", result)
+
+    def test_converts_mermaid_block(self):
+        """정상 케이스: mermaid 코드 블록 → mermaid-macro 변환"""
+        markdown = "```mermaid\ngraph TD\nA-->B\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">', result)
+        self.assertIn("<![CDATA[graph TD\nA-->B]]>", result)
+        self.assertNotIn('ac:name="code"', result)
+
+    def test_converts_mermaid_block_empty(self):
+        """엣지 케이스: 빈 mermaid 블록"""
+        markdown = "```mermaid\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('ac:name="mermaid-macro"', result)
+        self.assertIn("<![CDATA[]]>", result)
+
+    def test_converts_plantuml_block(self):
+        """정상 케이스: plantuml 코드 블록 → plantuml 매크로 변환"""
+        markdown = "```plantuml\n@startuml\nAlice -> Bob\n@enduml\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('<ac:structured-macro ac:name="plantuml" ac:schema-version="1">', result)
+        self.assertIn('<ac:parameter ac:name="atlassian-macro-output-type">INLINE</ac:parameter>', result)
+        self.assertIn("<![CDATA[@startuml\nAlice -> Bob\n@enduml]]>", result)
+
+    def test_converts_plantuml_block_empty(self):
+        """엣지 케이스: 빈 plantuml 블록"""
+        markdown = "```plantuml\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('ac:name="plantuml"', result)
+        self.assertIn('atlassian-macro-output-type', result)
+        self.assertIn("<![CDATA[]]>", result)
+
+    def test_code_block_with_special_chars_in_cdata(self):
+        """엣지 케이스: CDATA 내 특수문자가 이스케이프되지 않고 원본 유지"""
+        markdown = "```\nif (a < b && c > d) { return a & b; }\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn("<![CDATA[if (a < b && c > d) { return a & b; }]]>", result)
+
+    def test_mixed_code_blocks_in_document(self):
+        """엣지 케이스: 하나의 문서에 mermaid + plantuml + code 블록 혼합"""
+        markdown = "```mermaid\ngraph TD\n```\n\n```plantuml\n@startuml\n@enduml\n```\n\n```python\nprint(1)\n```"
+        result = confluence_cli.markdown_to_storage(markdown)
+        self.assertIn('ac:name="mermaid-macro"', result)
+        self.assertIn('ac:name="plantuml"', result)
+        self.assertIn('ac:name="code"', result)
+        # 순서 유지 확인
+        mermaid_pos = result.index('mermaid-macro')
+        plantuml_pos = result.index('"plantuml"')
+        code_pos = result.index('"code"')
+        self.assertLess(mermaid_pos, plantuml_pos)
+        self.assertLess(plantuml_pos, code_pos)
 
     def test_converts_unordered_list(self):
         """정상 케이스: 순서 없는 리스트 변환"""
