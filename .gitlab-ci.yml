@@ -135,5 +135,5 @@ deploy:marketplace:
 
     - echo ""
     - echo "=== Marketplace published ==="
-    - echo "Add:     /plugin marketplace add ${NDS_NEXUS_URL}/marketplace.json"
-    - echo "Install: /plugin install gabia-skills@gabia"
+    - 'echo "Add:     /plugin marketplace add ${NDS_NEXUS_URL}/marketplace.json"'
+    - 'echo "Install: /plugin install gabia-skills@gabia"'
