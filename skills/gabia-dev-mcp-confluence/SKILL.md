@@ -36,6 +36,56 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 3. 새 문서면 `create`, 기존 문서 수정이면 `update`를 사용합니다.
 4. 변경 이력/추가 설명은 `comment`로 남깁니다.
 
+### 다이어그램 작성
+
+- Confluence 문서에 다이어그램이 필요하면 **이미지 첨부보다 `mermaid-macro` 사용을 우선**합니다.
+- 기존 페이지에 mermaid가 있으면 반드시 `get --output-format storage`로 본문 XML을 확인한 뒤 같은 패턴으로 수정합니다.
+- 새 다이어그램을 추가할 때는 storage 본문에 아래 매크로를 직접 넣습니다.
+- 색상은 아래 `themeVariables` 값을 기본값으로 사용합니다.
+  - `background: #FFFFFF`
+  - `primaryColor: #E0F2FE`
+  - `primaryTextColor: #0F172A`
+  - `primaryBorderColor: #0369A1`
+  - `secondaryColor: #DCFCE7`
+  - `secondaryTextColor: #14532D`
+  - `secondaryBorderColor: #16A34A`
+  - `tertiaryColor: #FDE68A`
+  - `tertiaryTextColor: #78350F`
+  - `tertiaryBorderColor: #D97706`
+  - `lineColor: #334155`
+  - `noteBkgColor: #FEF3C7`
+  - `noteTextColor: #1F2937`
+- 현재 Confluence 환경에서는 `classDef`, `linkStyle` 같은 명시적 스타일보다 `%%{init: ... themeVariables ...}%%` 방식의 호환성이 더 높으므로 이를 우선 사용합니다.
+
+```xml
+<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">
+  <ac:plain-text-body><![CDATA[
+%%{init: {"theme": "base", "themeVariables": {
+  "darkMode": false,
+  "background": "#FFFFFF",
+  "primaryColor": "#E0F2FE",
+  "primaryTextColor": "#0F172A",
+  "primaryBorderColor": "#0369A1",
+  "secondaryColor": "#DCFCE7",
+  "secondaryTextColor": "#14532D",
+  "secondaryBorderColor": "#16A34A",
+  "tertiaryColor": "#FDE68A",
+  "tertiaryTextColor": "#78350F",
+  "tertiaryBorderColor": "#D97706",
+  "lineColor": "#334155",
+  "noteBkgColor": "#FEF3C7",
+  "noteTextColor": "#1F2937"
+}}}%%
+flowchart TD
+    A[시작] --> B[다이어그램 작성]
+    B --> C[Confluence 업데이트]
+  ]]></ac:plain-text-body>
+</ac:structured-macro>
+```
+
+- 문서 구조를 설명할 때는 `flowchart`, 데이터 관계를 설명할 때는 `erDiagram`을 우선 고려합니다.
+- mermaid가 포함된 페이지를 수정한 뒤에는 HTML 렌더링 결과도 다시 조회해 매크로 오류 여부를 확인합니다.
+
 ### 댓글 워크플로우
 
 1. `comments`로 기존 댓글 조회 → 형식/패턴 파악
