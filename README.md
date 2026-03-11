@@ -14,7 +14,26 @@
 
 ## Skills 설치
 
-### macOS / Linux
+### Claude Code Marketplace (권장)
+
+Claude Code의 플러그인 마켓플레이스를 통해 설치할 수 있습니다.
+
+```shell
+# 1. 마켓플레이스 추가 (최초 1회)
+/plugin marketplace add https://repo.gabia.com/repository/raw-repository/nds/marketplace.json
+
+# 2. 스킬 설치
+/plugin install gabia-skills@gabia
+
+# 3. 업데이트
+/plugin marketplace update
+```
+
+### 스크립트 설치
+
+여러 코딩 에이전트(Claude Code, Cursor, Codex, Gemini 등)에 일괄 설치할 때 사용합니다.
+
+#### macOS / Linux
 
 ```bash
 curl -fsSL https://repo.gabia.com/repository/raw-repository/nds/install.sh | bash
