@@ -1,0 +1,9 @@
+{
+  "name": "gabia-skills",
+  "description": "가비아 사내 업무 개선을 위한 스킬 모음",
+  "version": "1.0.0",
+  "author": {
+    "name": "gabia"
+  },
+  "keywords": ["gabia", "nds", "mcp", "devtools", "productivity"]
+}

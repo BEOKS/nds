@@ -1,0 +1,15 @@
+{
+  "name": "@nds/claude-skills",
+  "version": "1.0.0",
+  "description": "가비아 사내 업무 개선을 위한 스킬 모음",
+  "author": "gabia",
+  "license": "UNLICENSED",
+  "private": false,
+  "publishConfig": {
+    "registry": "https://repo.gabia.com/repository/npm-repository/"
+  },
+  "files": [
+    ".claude-plugin/",
+    "skills/"
+  ]
+}
