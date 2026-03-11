@@ -76,20 +76,19 @@ deploy:skills:
 # Claude Code Marketplace: npm 패키지 배포 + marketplace.json 업로드
 #
 # 사전 준비 (GitLab CI Variables):
-#   - NDS_NPM_TOKEN: Nexus npm 레지스트리 인증 토큰
-#   - NEXUS_USERNAME / NEXUS_PASSWORD: 기존 Nexus 인증 (deploy:skills 와 공유)
+#   - NEXUS_USERNAME / NEXUS_PASSWORD: Nexus npm + raw repository 인증 정보
 # ===========================================================================
 deploy:marketplace:
   stage: marketplace
   needs: ["deploy:skills"]
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NDS_NPM_TOKEN && $NEXUS_USERNAME && $NEXUS_PASSWORD
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NEXUS_USERNAME && $NEXUS_PASSWORD
       changes:
         - .gitlab-ci.yml
         - skills/**/*
         - plugins/**/*
         - .claude-plugin/**/*
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NDS_NPM_TOKEN && $NEXUS_USERNAME && $NEXUS_PASSWORD
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $NEXUS_USERNAME && $NEXUS_PASSWORD
       when: manual
       allow_failure: true
   image: node:20-alpine
@@ -99,7 +98,6 @@ deploy:marketplace:
     - set -euo pipefail
     - |
       missing=""
-      [ -n "${NDS_NPM_TOKEN:-}" ] || missing="$missing NDS_NPM_TOKEN"
       [ -n "${NEXUS_USERNAME:-}" ] || missing="$missing NEXUS_USERNAME"
       [ -n "${NEXUS_PASSWORD:-}" ] || missing="$missing NEXUS_PASSWORD"
       if [ -n "$missing" ]; then
@@ -130,7 +128,15 @@ deploy:marketplace:
     - jq --arg v "$VERSION" '.version = $v' .claude-plugin/plugin.json > tmp.json && mv tmp.json .claude-plugin/plugin.json
 
     # --- npm 배포 ---
-    - echo "//${NPM_REGISTRY#https://}:_authToken=${NDS_NPM_TOKEN}" > .npmrc
+    - |
+      NPM_REGISTRY_HOST="${NPM_REGISTRY#https://}"
+      NPM_REGISTRY_HOST="${NPM_REGISTRY_HOST#http://}"
+      NPM_AUTH="$(printf '%s:%s' "${NEXUS_USERNAME}" "${NEXUS_PASSWORD}" | base64 | tr -d '\n')"
+      cat > .npmrc <<EOF
+      registry=${NPM_REGISTRY}
+      //${NPM_REGISTRY_HOST}:_auth=${NPM_AUTH}
+      //${NPM_REGISTRY_HOST}:always-auth=true
+      EOF
     - npm publish --registry "$NPM_REGISTRY"
     - cd "$CI_PROJECT_DIR"
 
