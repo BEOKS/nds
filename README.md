@@ -18,6 +18,20 @@
 
 Claude Code의 플러그인 마켓플레이스를 통해 설치할 수 있습니다.
 
+**Claude Desktop (앱)**
+
+1. `사용자 지정` > `플러그인 탐색` > `개인` 탭 이동
+2. `URL로 마켓플레이스 추가` 클릭
+3. 아래 URL 입력:
+   ```
+   https://repo.gabia.com/repository/raw-repository/nds/marketplace.json
+   ```
+4. `개인` 탭에 스킬이 표시되면 설치 버튼 클릭
+
+> **참고**: 스킬 다운로드에 시간이 걸려 앱에서 오류가 표시될 수 있습니다. 실제로는 백그라운드에서 다운로드가 진행 중이므로 잠시 기다린 후 `개인` 탭을 다시 확인하면 스킬이 추가되어 있습니다. 설치 완료 후 대화 창에서 바로 사용할 수 있습니다.
+
+**Claude Code (CLI)**
+
 ```shell
 # 1. 마켓플레이스 추가 (최초 1회)
 /plugin marketplace add https://repo.gabia.com/repository/raw-repository/nds/marketplace.json
