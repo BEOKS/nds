@@ -41,6 +41,10 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 - Confluence 문서에 다이어그램이 필요하면 **이미지 첨부보다 `mermaid-macro` 사용을 우선**합니다.
 - 기존 페이지에 mermaid가 있으면 반드시 `get --output-format storage`로 본문 XML을 확인한 뒤 같은 패턴으로 수정합니다.
 - 새 다이어그램을 추가할 때는 storage 본문에 아래 매크로를 직접 넣습니다.
+- 사용자의 요청 의도에 따라 적절한 Mermaid 타입을 선택합니다.
+  - 흐름/절차 설명: `flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `journey`
+  - 데이터/객체 관계 설명: `erDiagram`, `classDiagram`
+  - 일정/비율/브랜치 흐름 설명: `gantt`, `pie`, `gitGraph`
 - 색상은 아래 `themeVariables` 값을 기본값으로 사용합니다.
   - `background: #FFFFFF`
   - `primaryColor: #E0F2FE`
@@ -56,6 +60,24 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
   - `noteBkgColor: #FEF3C7`
   - `noteTextColor: #1F2937`
 - 현재 Confluence 환경에서는 `classDef`, `linkStyle` 같은 명시적 스타일보다 `%%{init: ... themeVariables ...}%%` 방식의 호환성이 더 높으므로 이를 우선 사용합니다.
+- 현재 페이지 기준으로 렌더링 확인된 Mermaid 타입은 아래와 같습니다.
+  - `erDiagram`
+  - `flowchart`
+  - `sequenceDiagram`
+  - `classDiagram`
+  - `stateDiagram-v2`
+  - `gantt`
+  - `pie`
+  - `journey`
+  - `gitGraph`
+- `requirementDiagram`은 현재 Confluence 환경에서 제외합니다.
+- 다이어그램 데이터가 너무 커서 Confluence 편집기 성능 저하, 매크로 렌더링 지연, 페이지 로딩 저하가 우려되면 Mermaid 매크로를 고집하지 않습니다.
+- 이런 경우에는 Python 스크립트로 다이어그램 이미지를 생성한 뒤, Confluence 첨부파일로 업로드하고 페이지 본문에는 이미지를 삽입하는 방식으로 진행합니다.
+- 대용량 다이어그램 처리 순서는 아래를 따릅니다.
+  - Python 스크립트로 SVG 또는 PNG 생성
+  - `attachments` 또는 `upload`로 Confluence 페이지에 파일 업로드
+  - 본문에는 이미지 또는 첨부 링크를 배치
+  - 필요한 경우 원본 Mermaid 텍스트는 별도 코드 블록이나 하위 문단에 보관
 
 ```xml
 <ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">
