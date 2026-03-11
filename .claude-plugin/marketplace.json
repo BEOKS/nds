@@ -1,0 +1,24 @@
+{
+  "name": "gabia",
+  "owner": {
+    "name": "NDS Team"
+  },
+  "metadata": {
+    "description": "가비아 사내 업무 개선을 위한 마켓플레이스",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "nds-skills",
+      "source": {
+        "source": "npm",
+        "package": "@nds/claude-skills",
+        "registry": "https://repo.gabia.com/repository/npm-repository/"
+      },
+      "description": "문서 생성(PDF, PPTX, DOCX, XLSX), 코드리뷰, 디자인, 유틸리티 등 30+ 스킬",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["gabia", "nds", "mcp", "devtools", "documents", "database"]
+    }
+  ]
+}

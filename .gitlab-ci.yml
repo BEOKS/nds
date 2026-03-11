@@ -21,16 +21,97 @@
 # 3) tag(예: v1.2.3) 푸시 → macOS/Windows job 실행 → Nexus에 업로드
 
 stages:
+  - marketplace
   - release
 
 workflow:
   rules:
     - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - skills/**/*
+        - plugins/**/*
+        - .claude-plugin/**/*
     - when: never
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
+# ===========================================================================
+# Marketplace: npm 패키지 배포 + marketplace.json 업로드
+# ===========================================================================
+marketplace:publish:
+  stage: marketplace
+  image: node:20-alpine
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - skills/**/*
+        - plugins/**/*
+        - .claude-plugin/**/*
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - set -euo pipefail
+
+    # --- 버전 결정 (태그 → 태그 버전, main push → package.json 버전) ---
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+      else
+        VERSION=$(jq -r .version plugins/nds-skills/package.json)
+      fi
+      echo "Publishing version: $VERSION"
+
+    # --- 플러그인 디렉토리 준비 (symlink → 실제 파일 복사) ---
+    - rm -f plugins/nds-skills/skills
+    - cp -R skills plugins/nds-skills/skills
+    - find plugins/nds-skills/skills -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    - find plugins/nds-skills/skills -name ".DS_Store" -delete 2>/dev/null || true
+    - rm -f plugins/nds-skills/skills/manifest.txt
+    - rm -rf plugins/nds-skills/skills/.claude
+
+    # --- 버전 동기화 ---
+    - cd plugins/nds-skills
+    - jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
+    - jq --arg v "$VERSION" '.version = $v' .claude-plugin/plugin.json > plugin.json.tmp && mv plugin.json.tmp .claude-plugin/plugin.json
+
+    # --- npm 배포 ---
+    - NPM_REGISTRY="https://repo.gabia.com/repository/npm-repository/"
+    - echo "//${NPM_REGISTRY#https://}:_authToken=${NDS_NPM_TOKEN}" > .npmrc
+    - npm publish --registry "$NPM_REGISTRY"
+    - cd "$CI_PROJECT_DIR"
+
+    # --- marketplace.json 버전 동기화 및 Nexus raw repo 업로드 ---
+    - jq --arg v "$VERSION" '.plugins[0].version = $v' .claude-plugin/marketplace.json > marketplace.json.tmp && mv marketplace.json.tmp .claude-plugin/marketplace.json
+    - |
+      NEXUS_RAW_URL="${NDS_NEXUS_URL:-https://repo.gabia.com/repository/raw-repository/nds}"
+      curl -fsSL \
+        -u "${NDS_NEXUS_USERNAME}:${NDS_NEXUS_PASSWORD}" \
+        --upload-file .claude-plugin/marketplace.json \
+        "${NEXUS_RAW_URL}/marketplace.json"
+    - echo "marketplace.json uploaded to ${NEXUS_RAW_URL}/marketplace.json"
+
+    # --- nds-skills.zip 재생성 및 업로드 (기존 install.sh 호환) ---
+    - cd plugins/nds-skills
+    - zip -qr "$CI_PROJECT_DIR/nds-skills.zip" skills/
+    - cd "$CI_PROJECT_DIR"
+    - |
+      curl -fsSL \
+        -u "${NDS_NEXUS_USERNAME}:${NDS_NEXUS_PASSWORD}" \
+        --upload-file nds-skills.zip \
+        "${NEXUS_RAW_URL}/nds-skills.zip"
+    - echo "nds-skills.zip uploaded"
+
+    - echo ""
+    - echo "=== Published successfully ==="
+    - echo "Marketplace -> /plugin marketplace add ${NEXUS_RAW_URL}/marketplace.json"
+    - echo "Install     -> /plugin install nds-skills@gabia"
+
+# ===========================================================================
+# OpenWork Release
+# ===========================================================================
 openwork:release:macos:
   stage: release
   # 필요 시 태그 지정(예: macos)

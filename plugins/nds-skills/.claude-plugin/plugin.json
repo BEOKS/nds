@@ -1,0 +1,9 @@
+{
+  "name": "nds-skills",
+  "description": "NDS 개발 업무 효율화 스킬 모음 - MCP 연동, 문서 생성, 코드리뷰, 디자인 등 30+ 스킬",
+  "version": "1.0.0",
+  "author": {
+    "name": "NDS Team"
+  },
+  "keywords": ["gabia", "nds", "mcp", "devtools", "productivity"]
+}
