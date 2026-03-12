@@ -218,14 +218,44 @@ def markdown_to_storage(markdown: str) -> str:
             close_para()
             close_lists()
             close_quote()
+            code_lang = line[3:].strip()
             in_code = True
-            out.append("<pre><code>")
+            code_lines: list[str] = []
             i += 1
+            while i < len(lines):
+                raw2 = lines[i]
+                line2 = raw2.rstrip("\n").rstrip()
+                if line2 == "```":
+                    i += 1
+                    break
+                code_lines.append(raw2)
+                i += 1
+            code_content = "\n".join(code_lines).rstrip("\n")
+            if code_lang == "mermaid":
+                out.append(
+                    '<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">'
+                    f'<ac:plain-text-body><![CDATA[{code_content}]]></ac:plain-text-body>'
+                    '</ac:structured-macro>'
+                )
+            elif code_lang == "plantuml":
+                out.append(
+                    '<ac:structured-macro ac:name="plantuml" ac:schema-version="1">'
+                    '<ac:parameter ac:name="atlassian-macro-output-type">INLINE</ac:parameter>'
+                    f'<ac:plain-text-body><![CDATA[{code_content}]]></ac:plain-text-body>'
+                    '</ac:structured-macro>'
+                )
+            else:
+                lang_param = f'<ac:parameter ac:name="language">{escape_html(code_lang)}</ac:parameter>' if code_lang else ""
+                out.append(
+                    f'<ac:structured-macro ac:name="code" ac:schema-version="1">{lang_param}'
+                    f'<ac:plain-text-body><![CDATA[{code_content}]]></ac:plain-text-body>'
+                    '</ac:structured-macro>'
+                )
+            in_code = False
             continue
 
         if in_code:
             if line == "```":
-                out.append("</code></pre>")
                 in_code = False
             else:
                 out.append(escape_html(raw))
