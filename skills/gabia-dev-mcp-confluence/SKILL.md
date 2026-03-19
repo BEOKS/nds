@@ -38,13 +38,17 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
 
 ### 다이어그램 작성
 
+> **⚠️ 현재 Confluence 환경의 Mermaid 버전: 9.2.2**
+> 아래 가이드는 mermaid 9.2.2 호환성을 기준으로 작성되었습니다.
+
 - Confluence 문서에 다이어그램이 필요하면 **이미지 첨부보다 `mermaid-macro` 사용을 우선**합니다.
 - 기존 페이지에 mermaid가 있으면 반드시 `get --output-format storage`로 본문 XML을 확인한 뒤 같은 패턴으로 수정합니다.
 - 새 다이어그램을 추가할 때는 storage 본문에 아래 매크로를 직접 넣습니다.
 - 사용자의 요청 의도에 따라 적절한 Mermaid 타입을 선택합니다.
   - 흐름/절차 설명: `flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `journey`
   - 데이터/객체 관계 설명: `erDiagram`, `classDiagram`
-  - 일정/비율/브랜치 흐름 설명: `gantt`, `pie`, `gitGraph`
+  - 일정/비율 설명: `gantt`, `pie`
+  - ~~브랜치 흐름: `gitGraph`~~ → 9.2.2 미지원, PlantUML 또는 이미지로 대체
 - 색상은 아래 `themeVariables` 값을 기본값으로 사용합니다.
   - `background: #FFFFFF`
   - `primaryColor: #E0F2FE`
@@ -60,17 +64,20 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
   - `noteBkgColor: #FEF3C7`
   - `noteTextColor: #1F2937`
 - 현재 Confluence 환경에서는 `classDef`, `linkStyle` 같은 명시적 스타일보다 `%%{init: ... themeVariables ...}%%` 방식의 호환성이 더 높으므로 이를 우선 사용합니다.
-- 현재 페이지 기준으로 렌더링 확인된 Mermaid 타입은 아래와 같습니다.
+- **`%%{init:...}%%` directive는 반드시 한 줄에 작성해야 합니다.** 멀티라인으로 작성하면 mermaid 9.2.2에서 "Syntax error in graph" 파싱 에러가 발생합니다.
+- 현재 페이지 기준으로 렌더링 확인된 Mermaid 타입은 아래와 같습니다 (mermaid 9.2.2 호환).
   - `erDiagram`
-  - `flowchart`
+  - `flowchart` (`graph TD`도 사용 가능)
   - `sequenceDiagram`
   - `classDiagram`
   - `stateDiagram-v2`
   - `gantt`
   - `pie`
   - `journey`
-  - `gitGraph`
-- `requirementDiagram`은 현재 Confluence 환경에서 제외합니다.
+- **9.2.2 미지원/호환성 이슈 다이어그램 타입:**
+  - `gitGraph` — 9.2.2에서는 구문법(`gitGraph:` + options 블록)만 지원하며 신문법(`gitGraph` + commit/branch)은 "Syntax error" 발생. 사용을 피하고 필요시 PlantUML이나 이미지로 대체합니다.
+  - `requirementDiagram` — 현재 Confluence 환경에서 제외
+  - `mindmap`, `timeline`, `quadrantChart`, `sankey`, `zenuml`, `xychart-beta`, `block-beta` — mermaid 10.x 이후 추가된 타입으로 9.2.2에서 미지원
 - 다이어그램 데이터가 너무 커서 Confluence 편집기 성능 저하, 매크로 렌더링 지연, 페이지 로딩 저하가 우려되면 Mermaid 매크로를 고집하지 않습니다.
 - 이런 경우에는 Python 스크립트로 다이어그램 이미지를 생성한 뒤, Confluence 첨부파일로 업로드하고 페이지 본문에는 이미지를 삽입하는 방식으로 진행합니다.
 - 대용량 다이어그램 처리 순서는 아래를 따릅니다.
@@ -80,24 +87,9 @@ description: Confluence REST API를 직접 호출해 페이지 검색/조회/생
   - 필요한 경우 원본 Mermaid 텍스트는 별도 코드 블록이나 하위 문단에 보관
 
 ```xml
+<!-- ⚠️ %%{init:...}%% 는 반드시 한 줄로 작성 (mermaid 9.2.2 호환) -->
 <ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">
-  <ac:plain-text-body><![CDATA[
-%%{init: {"theme": "base", "themeVariables": {
-  "darkMode": false,
-  "background": "#FFFFFF",
-  "primaryColor": "#E0F2FE",
-  "primaryTextColor": "#0F172A",
-  "primaryBorderColor": "#0369A1",
-  "secondaryColor": "#DCFCE7",
-  "secondaryTextColor": "#14532D",
-  "secondaryBorderColor": "#16A34A",
-  "tertiaryColor": "#FDE68A",
-  "tertiaryTextColor": "#78350F",
-  "tertiaryBorderColor": "#D97706",
-  "lineColor": "#334155",
-  "noteBkgColor": "#FEF3C7",
-  "noteTextColor": "#1F2937"
-}}}%%
+  <ac:plain-text-body><![CDATA[%%{init: {"theme": "base", "themeVariables": {"darkMode": false, "background": "#FFFFFF", "primaryColor": "#E0F2FE", "primaryTextColor": "#0F172A", "primaryBorderColor": "#0369A1", "secondaryColor": "#DCFCE7", "secondaryTextColor": "#14532D", "secondaryBorderColor": "#16A34A", "tertiaryColor": "#FDE68A", "tertiaryTextColor": "#78350F", "tertiaryBorderColor": "#D97706", "lineColor": "#334155", "noteBkgColor": "#FEF3C7", "noteTextColor": "#1F2937"}}}%%
 flowchart TD
     A[시작] --> B[다이어그램 작성]
     B --> C[Confluence 업데이트]
@@ -343,7 +335,7 @@ python3 scripts/confluence_cli.py upload \
 | Markdown 호환 | ` ```mermaid ` 그대로 사용 | ` ```plantuml ` + @startuml/@enduml 필요 |
 | 문법 난이도 | 쉬움 | 보통 |
 | 한국어 | 지원 | 지원 |
-| 다이어그램 종류 | flowchart, sequence, state, class, ER, gantt, pie | 시퀀스, 상태, 컴포넌트, 클래스, 배포 |
+| 다이어그램 종류 | flowchart, sequence, state, class, ER, gantt, pie, journey (9.2.2 기준) | 시퀀스, 상태, 컴포넌트, 클래스, 배포, gitGraph 대체 |
 
 ### PlantUML 작성 시 주의사항
 
@@ -388,6 +380,9 @@ python3 scripts/confluence_cli.py upload \
 | `chart` (pie, bar, line) | 한국어 라벨 서버사이드 폰트 미지원 → □□□ 깨짐 | `mermaid-macro`의 `pie` 사용 |
 | `markdown` | 같은 페이지에서 mermaid flowchart 렌더링을 깨트림 (JS 충돌) | storage format(HTML)으로 직접 작성 |
 | `mermaid-macro` flowchart | `graph TD` 대신 `flowchart TD` 사용 권장 | - |
+| `mermaid-macro` init directive | **멀티라인 `%%{init:...}%%` → mermaid 9.2.2에서 "Syntax error in graph"** | 반드시 한 줄로 작성 |
+| `mermaid-macro` gitGraph | 9.2.2에서 신문법 미지원 → "Syntax error" | PlantUML 또는 이미지 첨부로 대체 |
+| `mermaid-macro` 10.x 전용 타입 | `mindmap`, `timeline`, `quadrantChart`, `sankey` 등 9.2.2 미지원 | PlantUML 또는 이미지 첨부로 대체 |
 
 ## 주의사항
 
