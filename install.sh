@@ -152,51 +152,51 @@ while [ $# -gt 0 ]; do
             ;;
         -h|--help)
             cat << 'EOF'
-NDS Skills Installer
+NDS 스킬 설치기
 
-Usage:
+사용법:
   curl -fsSL <url>/install.sh | bash
-  curl -fsSL <url>/install.sh | bash -s -- [OPTIONS]
+  curl -fsSL <url>/install.sh | bash -s -- [옵션]
 
-Options:
-  --claude           Install to Claude Code (~/.claude/skills)
-  --cursor           Install to Cursor (~/.claude/skills)
-  --codex            Install to Codex CLI (~/.codex/skills)
-  --gemini           Install to Gemini CLI (~/.gemini/skills)
-  --antigravity      Install to Antigravity (~/.gemini/antigravity/global_skills)
-  --copilot          Install to GitHub Copilot (~/.claude/skills)
-  --all              Install to all agents
-  --list             List available skills and exit
-  --skills "a,b,c"   Install only specified skills (comma-separated)
-  --no-interactive   Skip TUI selection (use with agent flags)
-  -h, --help         Show this help message
+옵션:
+  --claude           Claude Code에 설치 (~/.claude/skills)
+  --cursor           Cursor에 설치 (~/.claude/skills)
+  --codex            Codex CLI에 설치 (~/.codex/skills)
+  --gemini           Gemini CLI에 설치 (~/.gemini/skills)
+  --antigravity      Antigravity에 설치 (~/.gemini/antigravity/global_skills)
+  --copilot          GitHub Copilot에 설치 (~/.claude/skills)
+  --all              모든 에이전트에 설치
+  --list             사용 가능한 스킬 목록 출력 후 종료
+  --skills "a,b,c"   지정한 스킬만 설치 (쉼표로 구분)
+  --no-interactive   TUI 선택 건너뜀 (에이전트 플래그와 함께 사용)
+  -h, --help         도움말 표시
 
-Environment Variables:
-  NDS_GITLAB_HOST    GitLab host (default: gitlab.gabia.com)
-  NDS_GITLAB_PROJECT GitLab project path (default: nds/skills)
-  NDS_BRANCH         Branch to use (default: main)
+환경변수:
+  NDS_GITLAB_HOST    GitLab 호스트 (기본값: gitlab.gabia.com)
+  NDS_GITLAB_PROJECT GitLab 프로젝트 경로 (기본값: nds/skills)
+  NDS_BRANCH         사용할 브랜치 (기본값: main)
 
-Examples:
-  # Interactive mode (TUI selection)
+예시:
+  # 대화형 모드 (TUI 선택)
   curl -fsSL <url>/install.sh | bash
 
-  # Install to specific agents
+  # 특정 에이전트에 설치
   curl -fsSL <url>/install.sh | bash -s -- --claude --codex
 
-  # Install to all agents
+  # 모든 에이전트에 설치
   curl -fsSL <url>/install.sh | bash -s -- --all
 
-  # Install specific skills to Claude
+  # Claude에 특정 스킬 설치
   curl -fsSL <url>/install.sh | bash -s -- --claude --skills "gabia-dev-mcp-oracle,pptx"
 
-  # List available skills
+  # 사용 가능한 스킬 목록 확인
   curl -fsSL <url>/install.sh | bash -s -- --list
 EOF
             exit 0
             ;;
         *)
-            error "Unknown option: $1"
-            echo "Use --help for usage information"
+            error "알 수 없는 옵션: $1"
+            echo "--help를 사용하여 사용법을 확인하세요"
             exit 1
             ;;
     esac
@@ -214,7 +214,7 @@ check_requirements() {
     fi
 
     if [ -n "$missing" ]; then
-        error "Missing required tools:$missing"
+        error "필수 도구가 없습니다:$missing"
         exit 1
     fi
 }
@@ -261,62 +261,62 @@ get_python_version() {
 }
 
 install_python_macos() {
-    info "Attempting to install Python on macOS..."
+    info "macOS에서 Python 설치 시도 중..."
 
     # Check for Homebrew
     if command -v brew >/dev/null 2>&1; then
-        info "Installing Python via Homebrew..."
+        info "Homebrew를 통해 Python 설치 중..."
         brew install python
         return $?
     fi
 
     # Check for MacPorts
     if command -v port >/dev/null 2>&1; then
-        info "Installing Python via MacPorts..."
+        info "MacPorts를 통해 Python 설치 중..."
         sudo port install python311
         return $?
     fi
 
     # Fallback: Download from python.org
-    warn "No package manager found. Please install Python manually:"
-    echo "  1. Visit https://www.python.org/downloads/"
-    echo "  2. Download and install Python 3.11 or later"
-    echo "  3. Re-run this installer"
+    warn "패키지 관리자를 찾을 수 없습니다. Python을 수동으로 설치하세요:"
+    echo "  1. https://www.python.org/downloads/ 방문"
+    echo "  2. Python 3.11 이상 버전 다운로드 및 설치"
+    echo "  3. 이 설치기를 다시 실행하세요"
     return 1
 }
 
 install_python_linux() {
-    info "Attempting to install Python on Linux..."
+    info "Linux에서 Python 설치 시도 중..."
 
     # Detect package manager
     if command -v apt-get >/dev/null 2>&1; then
-        info "Installing Python via apt..."
+        info "apt를 통해 Python 설치 중..."
         sudo apt-get update
         sudo apt-get install -y python3 python3-pip python3-venv
         return $?
     elif command -v dnf >/dev/null 2>&1; then
-        info "Installing Python via dnf..."
+        info "dnf를 통해 Python 설치 중..."
         sudo dnf install -y python3 python3-pip
         return $?
     elif command -v yum >/dev/null 2>&1; then
-        info "Installing Python via yum..."
+        info "yum을 통해 Python 설치 중..."
         sudo yum install -y python3 python3-pip
         return $?
     elif command -v pacman >/dev/null 2>&1; then
-        info "Installing Python via pacman..."
+        info "pacman을 통해 Python 설치 중..."
         sudo pacman -S --noconfirm python python-pip
         return $?
     elif command -v apk >/dev/null 2>&1; then
-        info "Installing Python via apk..."
+        info "apk를 통해 Python 설치 중..."
         apk add --no-cache python3 py3-pip
         return $?
     elif command -v zypper >/dev/null 2>&1; then
-        info "Installing Python via zypper..."
+        info "zypper를 통해 Python 설치 중..."
         sudo zypper install -y python3 python3-pip
         return $?
     fi
 
-    warn "Could not detect package manager. Please install Python manually."
+    warn "패키지 관리자를 감지할 수 없습니다. Python을 수동으로 설치하세요."
     return 1
 }
 
@@ -332,8 +332,8 @@ install_python() {
             install_python_linux
             ;;
         *)
-            warn "Unsupported OS: $os_type"
-            warn "Please install Python 3.8+ manually"
+            warn "지원하지 않는 OS: $os_type"
+            warn "Python 3.8+ 를 수동으로 설치하세요"
             return 1
             ;;
     esac
@@ -342,35 +342,35 @@ install_python() {
 check_and_install_python() {
     echo ""
     echo -e "${CYAN}================================${NC}"
-    echo -e "${CYAN}   Python Environment Setup${NC}"
+    echo -e "${CYAN}   Python 환경 설정${NC}"
     echo -e "${CYAN}================================${NC}"
     echo ""
 
     if detect_python; then
         local version
         version=$(get_python_version)
-        success "Python found: $PYTHON_CMD (version $version)"
+        success "Python 발견: $PYTHON_CMD (버전 $version)"
 
         if [ -z "$PIP_CMD" ]; then
-            warn "pip not found. Attempting to install..."
+            warn "pip을 찾을 수 없습니다. 설치 시도 중..."
             $PYTHON_CMD -m ensurepip --upgrade 2>/dev/null || true
             detect_python
         fi
 
         if [ -n "$PIP_CMD" ]; then
-            success "pip found: $PIP_CMD"
+            success "pip 발견: $PIP_CMD"
         else
-            warn "pip not available. Python dependencies will not be installed."
+            warn "pip을 사용할 수 없습니다. Python 의존성이 설치되지 않습니다."
             return 1
         fi
         return 0
     fi
 
-    warn "Python 3 not found on this system."
+    warn "이 시스템에서 Python 3을 찾을 수 없습니다."
     echo ""
-    echo "Python is required for many NDS skills to work properly."
+    echo "많은 NDS 스킬이 정상 작동하려면 Python이 필요합니다."
     echo ""
-    echo -n "Would you like to install Python automatically? (y/n): "
+    echo -n "Python을 자동으로 설치하시겠습니까? (y/n): "
 
     local answer
     if [ -e /dev/tty ]; then
@@ -384,15 +384,15 @@ check_and_install_python() {
             if install_python; then
                 # Re-detect after installation
                 if detect_python; then
-                    success "Python installed successfully: $PYTHON_CMD"
+                    success "Python 설치 완료: $PYTHON_CMD"
                     return 0
                 fi
             fi
-            error "Failed to install Python"
+            error "Python 설치 실패"
             return 1
             ;;
         *)
-            warn "Skipping Python installation"
+            warn "Python 설치를 건너뜁니다"
             SKIP_PYTHON=true
             return 1
             ;;
@@ -401,53 +401,53 @@ check_and_install_python() {
 
 install_python_dependencies() {
     if [ "$SKIP_PYTHON" = true ]; then
-        warn "Skipping Python dependencies installation"
+        warn "Python 의존성 설치를 건너뜁니다"
         return 0
     fi
 
     echo ""
-    info "Installing Python dependencies..."
+    info "Python 의존성 설치 중..."
 
     # Download requirements.txt from Nexus
     local req_url="${NEXUS_BASE_URL}/requirements.txt"
     local req_file="${TEMP_DIR:-/tmp}/nds-requirements.txt"
 
     if curl -fsSL "$req_url" -o "$req_file" 2>/dev/null; then
-        info "Downloaded requirements.txt from Nexus"
+        info "Nexus에서 requirements.txt 다운로드 완료"
     else
         # Fallback: try GitLab
         req_url="https://${GITLAB_HOST}/${GITLAB_PROJECT}/-/raw/${BRANCH}/requirements.txt"
         if curl -fsSL "$req_url" -o "$req_file" 2>/dev/null; then
-            info "Downloaded requirements.txt from GitLab"
+            info "GitLab에서 requirements.txt 다운로드 완료"
         else
-            warn "Could not download requirements.txt"
+            warn "requirements.txt를 다운로드할 수 없습니다"
             return 1
         fi
     fi
 
     # Install dependencies
-    info "Installing packages (this may take a few minutes)..."
+    info "패키지 설치 중 (몇 분 소요될 수 있습니다)..."
 
     local pip_log="${TEMP_DIR:-/tmp}/nds-pip-install.log"
     local pip_exit_code=0
 
     # Try uv first (fastest, handles externally-managed-environment)
     if command -v uv &> /dev/null; then
-        info "Using uv for installation..."
+        info "uv를 사용하여 설치 중..."
         uv pip install --system --break-system-packages -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
     elif [ -n "$PIP_CMD" ]; then
-        info "Using pip for installation..."
+        info "pip를 사용하여 설치 중..."
         # Try with --break-system-packages first (pip 23.0+, needed for PEP 668)
         if $PIP_CMD install --user --break-system-packages -r "$req_file" > "$pip_log" 2>&1; then
             pip_exit_code=0
         else
             # Fallback: try without --break-system-packages (older pip or non-PEP668 systems)
-            info "Retrying without --break-system-packages..."
+            info "--break-system-packages 없이 재시도 중..."
             $PIP_CMD install --user -r "$req_file" > "$pip_log" 2>&1 || pip_exit_code=$?
         fi
     else
-        warn "No package manager found (uv or pip)."
-        warn "Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        warn "패키지 관리자를 찾을 수 없습니다 (uv 또는 pip)."
+        warn "uv 설치: curl -LsSf https://astral.sh/uv/install.sh | sh"
         return 1
     fi
 
@@ -464,16 +464,16 @@ install_python_dependencies() {
     fi
 
     if [ $pip_exit_code -eq 0 ]; then
-        success "Python dependencies installed successfully"
+        success "Python 의존성 설치 완료"
     else
-        warn "Some Python dependencies may have failed to install (exit code: $pip_exit_code)"
-        warn "You can manually install them later:"
+        warn "일부 Python 의존성 설치에 실패했을 수 있습니다 (종료 코드: $pip_exit_code)"
+        warn "나중에 수동으로 설치할 수 있습니다:"
         echo ""
-        echo "  # Option 1: Install uv (recommended)"
+        echo "  # 방법 1: uv 설치 (권장)"
         echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
         echo "  uv pip install --system --break-system-packages -r requirements.txt"
         echo ""
-        echo "  # Option 2: Use pip directly"
+        echo "  # 방법 2: pip 직접 사용"
         echo "  pip install --user --break-system-packages -r requirements.txt"
         return 1
     fi
@@ -493,7 +493,7 @@ install_python_dependencies() {
     fi
 
     if [ "$opt_downloaded" = true ]; then
-        info "Installing optional dependencies (mcp, anthropic)..."
+        info "선택적 의존성 설치 중 (mcp, anthropic)..."
         local opt_log="${TEMP_DIR:-/tmp}/nds-pip-optional.log"
         if command -v uv &> /dev/null; then
             uv pip install --system --break-system-packages -r "$opt_req_file" > "$opt_log" 2>&1 || true
@@ -502,10 +502,10 @@ install_python_dependencies() {
             $PIP_CMD install --user -r "$opt_req_file" > "$opt_log" 2>&1 || true
         fi
         if grep -qi "error" "$opt_log" 2>/dev/null; then
-            warn "Optional dependencies (mcp, anthropic) could not be installed."
-            warn "These are only needed for the mcp-builder skill (requires Python 3.10+)."
+            warn "선택적 의존성 (mcp, anthropic)을 설치할 수 없습니다."
+            warn "이는 mcp-builder 스킬에만 필요합니다 (Python 3.10+ 필요)."
         else
-            success "Optional dependencies installed"
+            success "선택적 의존성 설치 완료"
         fi
         rm -f "$opt_log"
     fi
@@ -537,12 +537,12 @@ show_multiselect_menu() {
         clear
         echo ""
         echo -e "${CYAN}================================${NC}"
-        echo -e "${CYAN}   NDS Skills Installer${NC}"
+        echo -e "${CYAN}   NDS 스킬 설치기${NC}"
         echo -e "${CYAN}================================${NC}"
         echo ""
-        echo -e "${BOLD}Select coding agents to install skills:${NC}"
+        echo -e "${BOLD}스킬을 설치할 코딩 에이전트를 선택하세요:${NC}"
         echo ""
-        echo -e "${DIM}  [Space] Toggle  [Enter] Confirm  [a] Select All  [n] Select None  [q] Quit${NC}"
+        echo -e "${DIM}  [Space] 선택/해제  [Enter] 확인  [a] 전체 선택  [n] 전체 해제  [q] 종료${NC}"
         echo ""
 
         # Display options
@@ -620,7 +620,7 @@ show_multiselect_menu() {
                 tput cnorm 2>/dev/null || true
                 stty echo 2>/dev/null || true
                 echo ""
-                info "Installation cancelled"
+                info "설치가 취소되었습니다"
                 exit 0
                 ;;
             '')  # Enter - confirm
@@ -669,8 +669,8 @@ get_skills_list() {
     fi
 
     # No fallback - manifest.txt must be available from Nexus
-    error "Failed to download manifest.txt from Nexus"
-    error "Please check your network connection or contact the administrator"
+    error "Nexus에서 manifest.txt 다운로드 실패"
+    error "네트워크 연결을 확인하거나 관리자에게 문의하세요"
     return 1
 }
 
@@ -679,14 +679,14 @@ get_skills_list() {
 # ============================================================================
 list_skills() {
     echo ""
-    echo -e "${CYAN}Available NDS Skills:${NC}"
+    echo -e "${CYAN}사용 가능한 NDS 스킬:${NC}"
     echo "========================"
     get_skills_list | while IFS= read -r skill; do
         [ -z "$skill" ] && continue
         echo "  • $skill"
     done
     echo ""
-    echo "Total: $(get_skills_list | grep -c .)"
+    echo "총: $(get_skills_list | grep -c .)"
     echo ""
 }
 
@@ -702,16 +702,16 @@ download_all_skills() {
     # Nexus archive URL
     local archive_url="${NEXUS_BASE_URL}/nds-skills.zip"
 
-    info "Downloading skills archive from Nexus..."
+    info "Nexus에서 스킬 아카이브 다운로드 중..."
 
     if ! curl -fsSL "$archive_url" -o "$archive_file" 2>/dev/null; then
-        error "Failed to download archive from Nexus"
+        error "Nexus에서 아카이브 다운로드 실패"
         error "URL: $archive_url"
-        error "Check if the file exists and is accessible"
+        error "파일이 존재하고 접근 가능한지 확인하세요"
         return 1
     fi
 
-    info "Extracting..."
+    info "압축 해제 중..."
 
     # Extract zip file
     unzip -q "$archive_file" -d "$TEMP_DIR"
@@ -745,15 +745,15 @@ download_all_skills() {
             # Remove __pycache__ directories
             find "$dest_skill_dir" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-            success "Installed: $skill"
+            success "설치 완료: $skill"
             installed=$((installed + 1))
         # Check for .skill file
         elif [ -f "$src_skill_file" ]; then
             cp "$src_skill_file" "$dest_skill_file"
-            success "Installed: ${skill}.skill"
+            success "설치 완료: ${skill}.skill"
             installed=$((installed + 1))
         else
-            warn "Not found: $skill"
+            warn "찾을 수 없음: $skill"
             skipped=$((skipped + 1))
         fi
     done << EOF
@@ -761,8 +761,8 @@ $skills_to_install
 EOF
 
     echo ""
-    info "Installed: $installed skills"
-    [ $skipped -gt 0 ] && warn "Skipped: $skipped skills"
+    info "설치 완료: $installed개 스킬"
+    [ $skipped -gt 0 ] && warn "건너뜀: $skipped개 스킬"
 
     return 0
 }
@@ -776,17 +776,17 @@ install_to() {
     local agent_name=$(get_agent_name "$agent_key")
 
     echo ""
-    info "Installing to ${agent_name} (${skills_dir})..."
+    info "${agent_name} (${skills_dir})에 설치 중..."
 
     # Create skills directory
     mkdir -p "$skills_dir"
 
     # Download and install
     if download_all_skills "$skills_dir"; then
-        success "Installation to ${agent_name} complete"
+        success "${agent_name} 설치 완료"
         return 0
     else
-        error "Installation to ${agent_name} failed"
+        error "${agent_name} 설치 실패"
         return 1
     fi
 }
@@ -807,7 +807,7 @@ prompt_env_var() {
     eval "current_value=\${$var_name:-}"
 
     if [ -n "$current_value" ]; then
-        success "$var_name is already set"
+        success "$var_name 이미 설정되어 있습니다"
         return 0
     fi
 
@@ -818,9 +818,9 @@ prompt_env_var() {
         echo -e "  ${DIM}토큰 생성: $token_url${NC}"
     fi
 
-    local prompt_text="  Enter value"
+    local prompt_text="  값을 입력하세요"
     if [ "$is_optional" = "true" ]; then
-        prompt_text="$prompt_text (or press Enter to skip)"
+        prompt_text="$prompt_text (건너뛰려면 Enter를 누르세요)"
     fi
     echo -n "$prompt_text: "
 
@@ -833,17 +833,17 @@ prompt_env_var() {
 
     if [ -z "$value" ]; then
         if [ "$is_optional" = "true" ]; then
-            warn "Skipped $var_name"
+            warn "건너뜀 $var_name"
             return 0
         else
-            warn "Skipped $var_name (required for this skill)"
+            warn "건너뜀 $var_name (이 스킬에 필요합니다)"
             return 1
         fi
     fi
 
     # Add to shell profile
     ENV_VARS_ADDED+=("export $var_name=\"$value\"")
-    success "Set $var_name"
+    success "설정 완료 $var_name"
     return 0
 }
 
@@ -982,7 +982,7 @@ configure_environment_variables() {
         save_environment_variables
     else
         echo ""
-        info "No environment variables were configured"
+        info "환경변수가 설정되지 않았습니다"
     fi
 }
 
@@ -1050,7 +1050,7 @@ save_environment_variables() {
 main() {
     echo ""
     echo -e "${CYAN}================================${NC}"
-    echo -e "${CYAN}   NDS Skills Installer${NC}"
+    echo -e "${CYAN}   NDS 스킬 설치기${NC}"
     echo -e "${CYAN}================================${NC}"
     echo ""
 
@@ -1071,13 +1071,13 @@ main() {
             show_multiselect_menu
 
             if [ -z "$SELECTED_AGENTS" ]; then
-                warn "No agents selected"
+                warn "에이전트가 선택되지 않았습니다"
                 exit 0
             fi
         else
             # No TTY available (piped input), try to read from /dev/tty
             if [ -e /dev/tty ]; then
-                echo "Available coding agents:"
+                echo "사용 가능한 코딩 에이전트:"
                 echo "  1) Claude Code  (~/.claude/skills)"
                 echo "  2) Cursor       (~/.claude/skills)"
                 echo "  3) Codex CLI    (~/.codex/skills)"
@@ -1085,7 +1085,7 @@ main() {
                 echo "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
                 echo "  6) Copilot      (~/.claude/skills)"
                 echo ""
-                echo -n "Enter numbers separated by space (e.g., '1 3 4') or 'all': "
+                echo -n "번호를 공백으로 구분하여 입력하세요 (예: '1 3 4') 또는 'all': "
                 read -r selection </dev/tty
 
                 if [ "$selection" = "all" ]; then
@@ -1104,12 +1104,12 @@ main() {
                 fi
 
                 if [ -z "$SELECTED_AGENTS" ]; then
-                    warn "No agents selected"
+                    warn "에이전트가 선택되지 않았습니다"
                     exit 0
                 fi
             else
                 # No TTY at all, default to all agents
-                info "No interactive terminal available, installing to all agents"
+                info "대화형 터미널을 사용할 수 없어 모든 에이전트에 설치합니다"
                 SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
             fi
         fi
@@ -1132,9 +1132,9 @@ main() {
     done
 
     echo ""
-    info "Source: ${NEXUS_BASE_URL}"
+    info "소스: ${NEXUS_BASE_URL}"
     echo ""
-    info "Selected agents:"
+    info "선택된 에이전트:"
     for agent in $SELECTED_AGENTS; do
         echo "  • $(get_agent_name "$agent") ($(get_agent_path "$agent"))"
     done
@@ -1152,11 +1152,11 @@ main() {
     echo -e "${CYAN}================================${NC}"
 
     if [ "$install_failed" = true ]; then
-        error "Installation completed with errors"
+        error "설치가 오류와 함께 완료되었습니다"
         exit 1
     fi
 
-    success "Skills installation complete!"
+    success "스킬 설치 완료!"
     echo -e "${CYAN}================================${NC}"
     echo ""
 
@@ -1167,11 +1167,11 @@ main() {
     configure_environment_variables
 
     echo ""
-    echo "Next steps:"
-    echo "  1. Restart your coding agent"
-    echo "  2. Source your shell profile: source ~/.zshrc (or ~/.bashrc)"
+    echo "다음 단계:"
+    echo "  1. 코딩 에이전트를 재시작하세요"
+    echo "  2. 쉘 프로필을 다시 로드하세요: source ~/.zshrc (또는 ~/.bashrc)"
     if [ -n "$PYTHON_CMD" ]; then
-        echo "  3. Python dependencies have been installed for skills"
+        echo "  3. 스킬에 필요한 Python 의존성이 설치되었습니다"
     fi
     echo ""
 }
