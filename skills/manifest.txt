@@ -9,6 +9,7 @@ doc-coauthoring
 docx
 frontend-design
 gabia-dev-mcp-confluence
+gabia-dev-mcp-confluence-ui-mockup
 gabia-dev-mcp-elasticsearch
 gabia-dev-mcp-figma
 gabia-dev-mcp-gitlab-issues
