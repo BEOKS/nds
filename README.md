@@ -63,12 +63,12 @@ irm https://repo.gabia.com/repository/raw-repository/nds/install.ps1 | iex
 
 ```
 ================================
-   NDS Skills Installer
+   NDS 스킬 설치기
 ================================
 
-Select coding agents to install skills:
+스킬을 설치할 코딩 에이전트를 선택하세요:
 
-  [Space] Toggle  [Enter] Confirm  [a] Select All  [n] Select None  [q] Quit
+  [Space] 선택/해제  [Enter] 확인  [a] 전체 선택  [n] 전체 해제  [q] 종료
 
 > [✓] Claude Code
       ~/.claude/skills
