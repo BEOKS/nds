@@ -1,46 +1,49 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    NDS Skills Installer for Windows
+    Windows용 NDS 스킬 설치기
 
 .DESCRIPTION
-    Installs NDS skills to various coding agent directories with interactive TUI selection
+    대화형 TUI 선택으로 다양한 코딩 에이전트 디렉터리에 NDS 스킬을 설치합니다
 
 .PARAMETER Claude
-    Install to Claude Code (~/.claude/skills)
+    Claude Code에 설치 (~/.claude/skills)
 
 .PARAMETER Cursor
-    Install to Cursor (~/.claude/skills)
+    Cursor에 설치 (~/.claude/skills)
 
 .PARAMETER Codex
-    Install to Codex CLI (~/.codex/skills)
+    Codex CLI에 설치 (~/.codex/skills)
 
 .PARAMETER Gemini
-    Install to Gemini CLI (~/.gemini/skills)
+    Gemini CLI에 설치 (~/.gemini/skills)
 
 .PARAMETER Antigravity
-    Install to Antigravity (~/.gemini/antigravity/global_skills)
+    Antigravity에 설치 (~/.gemini/antigravity/global_skills)
 
 .PARAMETER Copilot
-    Install to GitHub Copilot (~/.claude/skills)
+    GitHub Copilot에 설치 (~/.claude/skills)
 
 .PARAMETER All
-    Install to all agents
+    모든 에이전트에 설치
 
 .PARAMETER List
-    List available skills and exit
+    사용 가능한 스킬 목록을 표시하고 종료
 
 .PARAMETER Skills
-    Comma-separated list of skills to install
+    설치할 스킬 목록 (쉼표로 구분)
+
+.PARAMETER NoInteractive
+    대화형 TUI 선택을 건너뜀
 
 .EXAMPLE
-    # Interactive mode (TUI selection)
+    # 대화형 모드 (TUI 선택)
     irm https://gitlab.gabia.com/<group>/nds/-/raw/main/install.ps1 | iex
 
-    # Install to specific agents
+    # 특정 에이전트에 설치
     $env:NDS_AGENTS = "claude,codex"; irm <url>/install.ps1 | iex
 
-    # Install to all agents
+    # 모든 에이전트에 설치
     $env:NDS_AGENTS = "all"; irm <url>/install.ps1 | iex
 #>
 
@@ -78,7 +81,7 @@ function Get-UserHomePath {
         }
     }
 
-    throw "Could not determine the user home directory."
+    throw "사용자 홈 디렉터리를 확인할 수 없습니다."
 }
 
 function Get-TempPathSafe {
@@ -92,7 +95,7 @@ function Get-TempPathSafe {
         }
     }
 
-    throw "Could not determine a temporary directory."
+    throw "임시 디렉터리를 확인할 수 없습니다."
 }
 
 function Test-CanPrompt {
@@ -174,20 +177,20 @@ function Write-Err {
 # ============================================================================
 if ($Help) {
     @"
-NDS Skills Installer for Windows
+Windows용 NDS 스킬 설치기
 
-Usage:
+사용법:
     irm <url>/install.ps1 | iex
 
-Environment Variables:
-    NDS_AGENTS         Comma-separated agents: claude,cursor,codex,gemini,antigravity,copilot (or "all")
-    NDS_SKILLS         Comma-separated list of skills to install
-    NDS_NO_INTERACTIVE Skip TUI selection when set to "true"
-    NDS_GITLAB_HOST    GitLab host (default: gitlab.gabia.com)
-    NDS_GITLAB_PROJECT GitLab project path (default: gabia/idc/nds)
-    NDS_BRANCH         Branch to use (default: main)
+환경변수:
+    NDS_AGENTS         쉼표로 구분된 에이전트: claude,cursor,codex,gemini,antigravity,copilot (또는 "all")
+    NDS_SKILLS         설치할 스킬 목록 (쉼표로 구분)
+    NDS_NO_INTERACTIVE "true"로 설정하면 TUI 선택을 건너뜀
+    NDS_GITLAB_HOST    GitLab 호스트 (기본값: gitlab.gabia.com)
+    NDS_GITLAB_PROJECT GitLab 프로젝트 경로 (기본값: gabia/idc/nds)
+    NDS_BRANCH         사용할 브랜치 (기본값: main)
 
-Agent Paths:
+에이전트 경로:
     Claude Code   ~/.claude/skills
     Cursor        ~/.claude/skills
     Codex CLI     ~/.codex/skills
@@ -195,27 +198,27 @@ Agent Paths:
     Antigravity   ~/.gemini/antigravity/global_skills
     Copilot       ~/.claude/skills
 
-Examples:
-    # Interactive mode
+예시:
+    # 대화형 모드
     irm <url>/install.ps1 | iex
 
-    # Install to Claude and Codex
+    # Claude와 Codex에 설치
     `$env:NDS_AGENTS = "claude,codex"
     irm <url>/install.ps1 | iex
 
-    # Install to all agents
+    # 모든 에이전트에 설치
     `$env:NDS_AGENTS = "all"
     irm <url>/install.ps1 | iex
 
-    # Install specific skills
+    # 특정 스킬 설치
     `$env:NDS_SKILLS = "gabia-dev-mcp-oracle,pptx"
     irm <url>/install.ps1 | iex
 
-    # Skip interactive prompts
+    # 대화형 프롬프트 건너뜀
     `$env:NDS_NO_INTERACTIVE = "true"
     irm <url>/install.ps1 | iex
 
-    # List available skills
+    # 사용 가능한 스킬 목록 표시
     `$env:NDS_LIST = "true"
     irm <url>/install.ps1 | iex
 "@
@@ -267,8 +270,8 @@ $InvalidAgents = @(
 )
 
 if ($InvalidAgents.Count -gt 0) {
-    Write-Err "Unknown agents: $($InvalidAgents -join ', ')"
-    Write-Info "Valid agents: $($AgentOrder -join ', ')"
+    Write-Err "알 수 없는 에이전트: $($InvalidAgents -join ', ')"
+    Write-Info "유효한 에이전트: $($AgentOrder -join ', ')"
     exit 1
 }
 
@@ -296,12 +299,12 @@ function Show-MultiSelectMenu {
             Clear-Host
             Write-Host ""
             Write-Host "================================" -ForegroundColor Cyan
-            Write-Host "   NDS Skills Installer" -ForegroundColor Cyan
+            Write-Host "   NDS 스킬 설치기" -ForegroundColor Cyan
             Write-Host "================================" -ForegroundColor Cyan
             Write-Host ""
             Write-Host $Title -ForegroundColor White
             Write-Host ""
-            Write-Host "  [Space] Toggle  [Enter] Confirm  [A] Select All  [N] Select None  [Q] Quit" -ForegroundColor DarkGray
+            Write-Host "  [Space] 선택/해제  [Enter] 확인  [A] 전체 선택  [N] 전체 해제  [Q] 종료" -ForegroundColor DarkGray
             Write-Host ""
 
             for ($i = 0; $i -lt $numOptions; $i++) {
@@ -368,7 +371,7 @@ function Show-MultiSelectMenu {
                 "Q" {
                     [Console]::CursorVisible = $true
                     Clear-Host
-                    Write-Info "Installation cancelled"
+                    Write-Info "설치가 취소되었습니다"
                     exit 0
                 }
                 "J" {
@@ -474,14 +477,14 @@ function Get-SkillsList {
 # ============================================================================
 if ($List) {
     Write-Host ""
-    Write-Host "Available NDS Skills:" -ForegroundColor Cyan
+    Write-Host "사용 가능한 NDS 스킬:" -ForegroundColor Cyan
     Write-Host "========================"
     $skillsList = Get-SkillsList
     foreach ($skill in $skillsList) {
         Write-Host "  * $skill"
     }
     Write-Host ""
-    Write-Host "Total: $($skillsList.Count)"
+    Write-Host "총: $($skillsList.Count)"
     Write-Host ""
     exit 0
 }
@@ -540,7 +543,7 @@ function Find-Python {
             return $true
         }
         catch {
-            Write-Warn "pip not available for $script:PythonDisplay"
+            Write-Warn "pip을 사용할 수 없습니다: $script:PythonDisplay"
         }
         return $true
     }
@@ -559,86 +562,86 @@ function Get-PythonVersion {
 }
 
 function Install-PythonWindows {
-    Write-Info "Attempting to install Python on Windows..."
+    Write-Info "Windows에서 Python 설치 시도 중..."
 
     # Check for winget
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Info "Installing Python via winget..."
+        Write-Info "winget으로 Python 설치 중..."
         try {
             winget install -e --id Python.Python.3.11 --accept-package-agreements --accept-source-agreements
             return $true
         }
         catch {
-            Write-Warn "winget installation failed"
+            Write-Warn "winget 설치 실패"
         }
     }
 
     # Check for chocolatey
     if (Get-Command choco -ErrorAction SilentlyContinue) {
-        Write-Info "Installing Python via Chocolatey..."
+        Write-Info "Chocolatey로 Python 설치 중..."
         try {
             choco install python3 -y
             return $true
         }
         catch {
-            Write-Warn "Chocolatey installation failed"
+            Write-Warn "Chocolatey 설치 실패"
         }
     }
 
     # Check for scoop
     if (Get-Command scoop -ErrorAction SilentlyContinue) {
-        Write-Info "Installing Python via Scoop..."
+        Write-Info "Scoop으로 Python 설치 중..."
         try {
             scoop install python
             return $true
         }
         catch {
-            Write-Warn "Scoop installation failed"
+            Write-Warn "Scoop 설치 실패"
         }
     }
 
     # Fallback: Download from python.org
-    Write-Warn "No package manager found. Please install Python manually:"
-    Write-Host "  1. Visit https://www.python.org/downloads/"
-    Write-Host "  2. Download and install Python 3.11 or later"
-    Write-Host "  3. Make sure to check 'Add Python to PATH' during installation"
-    Write-Host "  4. Re-run this installer"
+    Write-Warn "패키지 관리자를 찾을 수 없습니다. Python을 수동으로 설치하세요:"
+    Write-Host "  1. https://www.python.org/downloads/ 방문"
+    Write-Host "  2. Python 3.11 이상 버전 다운로드 및 설치"
+    Write-Host "  3. 설치 중 'Add Python to PATH' 항목을 반드시 체크하세요"
+    Write-Host "  4. 이 설치기를 다시 실행하세요"
     return $false
 }
 
 function Test-AndInstallPython {
     Write-Host ""
     Write-Host "================================" -ForegroundColor Cyan
-    Write-Host "   Python Environment Setup" -ForegroundColor Cyan
+    Write-Host "   Python 환경 설정" -ForegroundColor Cyan
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
 
     if (Find-Python) {
         $version = Get-PythonVersion
-        Write-Success "Python found: $script:PythonDisplay (version $version)"
+        Write-Success "Python 발견: $script:PythonDisplay (버전 $version)"
 
         if ($script:PipCmd) {
-            Write-Success "pip found: $script:PipCmd"
+            Write-Success "pip 발견: $script:PipCmd"
         }
         else {
-            Write-Warn "pip not available. Python dependencies will not be installed."
+            Write-Warn "pip을 사용할 수 없습니다. Python 의존성이 설치되지 않습니다."
             return $false
         }
         return $true
     }
 
-    Write-Warn "Python 3 not found on this system."
+    Write-Warn "이 시스템에서 Python 3을 찾을 수 없습니다."
     Write-Host ""
-    Write-Host "Python is required for many NDS skills to work properly."
+    Write-Host "많은 NDS 스킬이 정상 작동하려면 Python이 필요합니다."
     Write-Host ""
 
     if (-not (Test-CanPrompt)) {
-        Write-Warn "Skipping Python installation because interactive prompts are unavailable."
+        Write-Warn "대화형 프롬프트를 사용할 수 없어 Python 설치를 건너뜁니다."
         $script:SkipPython = $true
         return $false
     }
 
-    $answer = Read-Host "Would you like to install Python automatically? (y/n)"
+    $answer = Read-Host "Python을 자동으로 설치하시겠습니까? (y/n)"
 
     if ($answer -match "^[Yy]") {
         if (Install-PythonWindows) {
@@ -646,15 +649,15 @@ function Test-AndInstallPython {
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
             if (Find-Python) {
-                Write-Success "Python installed successfully: $script:PythonDisplay"
+                Write-Success "Python 설치 완료: $script:PythonDisplay"
                 return $true
             }
         }
-        Write-Err "Failed to install Python"
+        Write-Err "Python 설치 실패"
         return $false
     }
     else {
-        Write-Warn "Skipping Python installation"
+        Write-Warn "Python 설치를 건너뜁니다"
         $script:SkipPython = $true
         return $false
     }
@@ -662,7 +665,7 @@ function Test-AndInstallPython {
 
 function Install-PythonDependencies {
     if ($script:SkipPython -or -not $script:PipCmd) {
-        Write-Warn "Skipping Python dependencies installation"
+        Write-Warn "Python 의존성 설치를 건너뜁니다"
         return
     }
 
@@ -685,7 +688,7 @@ function Install-PythonDependencies {
                     Remove-Item $localFile -Force -ErrorAction SilentlyContinue
                     continue
                 }
-                Write-Info "Downloaded $FileName from $url"
+                Write-Info "$FileName 다운로드 완료: $url"
                 return $localFile
             }
             catch {
@@ -707,28 +710,28 @@ function Install-PythonDependencies {
             $process = Start-Process -FilePath $script:PythonCmd -ArgumentList $pipArgs -NoNewWindow -PassThru -Wait
 
             if ($process.ExitCode -eq 0) {
-                Write-Success "$DisplayName installed successfully"
+                Write-Success "$DisplayName 설치 완료"
                 return $true
             }
 
             if ($Optional) {
-                Write-Warn "$DisplayName could not be installed (exit code: $($process.ExitCode))"
-                Write-Warn "These packages are optional and only needed for specific skills"
+                Write-Warn "$DisplayName 설치 실패 (종료 코드: $($process.ExitCode))"
+                Write-Warn "이 패키지는 선택 사항으로 특정 스킬에만 필요합니다"
             }
             else {
-                Write-Warn "Some Python dependencies may have failed to install (exit code: $($process.ExitCode))"
-                Write-Warn "You can manually install them later with:"
+                Write-Warn "일부 Python 의존성 설치에 실패했을 수 있습니다 (종료 코드: $($process.ExitCode))"
+                Write-Warn "나중에 수동으로 설치할 수 있습니다:"
                 Write-Host "  pip install --user -r requirements.txt"
             }
             return $false
         }
         catch {
             if ($Optional) {
-                Write-Warn "Failed to install ${DisplayName}: $_"
+                Write-Warn "${DisplayName} 설치 실패: $_"
             }
             else {
-                Write-Warn "Failed to install Python dependencies: $_"
-                Write-Warn "You can manually install them later with:"
+                Write-Warn "Python 의존성 설치 실패: $_"
+                Write-Warn "나중에 수동으로 설치할 수 있습니다:"
                 Write-Host "  pip install --user -r requirements.txt"
             }
             return $false
@@ -736,16 +739,16 @@ function Install-PythonDependencies {
     }
 
     Write-Host ""
-    Write-Info "Installing packages (this may take a few minutes)..."
+    Write-Info "패키지 설치 중 (몇 분 소요될 수 있습니다)..."
 
     $reqFile = Get-RequirementsFile -FileName "requirements.txt"
     if (-not $reqFile) {
-        Write-Warn "Could not download requirements.txt"
+        Write-Warn "requirements.txt를 다운로드할 수 없습니다"
         return
     }
 
     try {
-        $installed = Invoke-RequirementsInstall -ReqFile $reqFile -DisplayName "Python dependencies"
+        $installed = Invoke-RequirementsInstall -ReqFile $reqFile -DisplayName "Python 의존성"
 
         if (-not $installed) {
             return
@@ -753,8 +756,8 @@ function Install-PythonDependencies {
 
         $optReqFile = Get-RequirementsFile -FileName "requirements-optional.txt"
         if ($optReqFile) {
-            Write-Info "Installing optional dependencies (mcp, anthropic)..."
-            Invoke-RequirementsInstall -ReqFile $optReqFile -DisplayName "Optional dependencies" -Optional $true | Out-Null
+            Write-Info "선택적 의존성 설치 중 (mcp, anthropic)..."
+            Invoke-RequirementsInstall -ReqFile $optReqFile -DisplayName "선택적 의존성" -Optional $true | Out-Null
             Remove-Item $optReqFile -Force -ErrorAction SilentlyContinue
         }
     }
@@ -835,25 +838,25 @@ function Install-Skills {
         $archiveUrl = "$NexusBaseUrl/nds-skills.zip"
         $archiveFile = Join-Path $tempDir "nds-skills.zip"
 
-        Write-Info "Downloading skills archive from Nexus..."
+        Write-Info "Nexus에서 스킬 아카이브 다운로드 중..."
 
         try {
             Invoke-WebRequest -Uri $archiveUrl -OutFile $archiveFile -ErrorAction Stop
         }
         catch {
-            Write-Err "Failed to download archive from Nexus"
+            Write-Err "Nexus에서 아카이브 다운로드 실패"
             Write-Err "URL: $archiveUrl"
             return $false
         }
 
-        Write-Info "Extracting..."
+        Write-Info "압축 해제 중..."
         Expand-Archive -Path $archiveFile -DestinationPath $tempDir -Force
 
         # 아카이브 구조가 달라도 실제 skills source root를 찾는다.
         $skillsRoot = Resolve-SkillsArchiveRoot -ExtractedDir $tempDir
 
         if (-not $skillsRoot) {
-            Write-Err "Skills directory not found in archive"
+            Write-Err "아카이브에서 스킬 디렉터리를 찾을 수 없습니다"
             return $false
         }
 
@@ -887,25 +890,25 @@ function Install-Skills {
                 Get-ChildItem -Path $destSkillDir -Recurse -Directory -Filter "__pycache__" |
                     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-                Write-Success "Installed: $skill"
+                Write-Success "설치 완료: $skill"
                 $installed++
             }
             # Check for .skill file
             elseif (Test-Path $srcSkillFile) {
                 Copy-Item -Path $srcSkillFile -Destination $destSkillFile -Force
-                Write-Success "Installed: $skill.skill"
+                Write-Success "설치 완료: $skill.skill"
                 $installed++
             }
             else {
-                Write-Warn "Not found: $skill"
+                Write-Warn "찾을 수 없음: $skill"
                 $skipped++
             }
         }
 
         Write-Host ""
-        Write-Info "Installed: $installed skills"
+        Write-Info "설치 완료: $installed개 스킬"
         if ($skipped -gt 0) {
-            Write-Warn "Skipped: $skipped skills"
+            Write-Warn "건너뜀: $skipped개 스킬"
         }
 
         return $true
@@ -926,16 +929,16 @@ function Install-SkillsTo {
     $skillsDir = $AgentConfig[$AgentKey].Path
 
     Write-Host ""
-    Write-Info "Installing to $agentName ($skillsDir)..."
+    Write-Info "$agentName ($skillsDir)에 설치 중..."
 
     New-Item -ItemType Directory -Path $skillsDir -Force | Out-Null
 
     if (Install-Skills -TargetDir $skillsDir) {
-        Write-Success "Installation to $agentName complete"
+        Write-Success "$agentName 설치 완료"
         return $true
     }
     else {
-        Write-Err "Installation to $agentName failed"
+        Write-Err "$agentName 설치 실패"
         return $false
     }
 }
@@ -957,7 +960,7 @@ function Prompt-EnvVar {
     $currentValue = [Environment]::GetEnvironmentVariable($VarName, "User")
 
     if ($currentValue) {
-        Write-Success "$VarName is already set"
+        Write-Success "$VarName 이미 설정되어 있습니다"
         return $true
     }
 
@@ -968,38 +971,38 @@ function Prompt-EnvVar {
         Write-Host "  토큰 생성: $TokenUrl" -ForegroundColor DarkGray
     }
 
-    $promptText = "  Enter value"
+    $promptText = "  값을 입력하세요"
     if ($IsOptional) {
-        $promptText += " (or press Enter to skip)"
+        $promptText += " (건너뛰려면 Enter를 누르세요)"
     }
 
     $value = Read-Host $promptText
 
     if ([string]::IsNullOrWhiteSpace($value)) {
         if ($IsOptional) {
-            Write-Warn "Skipped $VarName"
+            Write-Warn "$VarName 건너뜀"
             return $true
         }
         else {
-            Write-Warn "Skipped $VarName (required for this skill)"
+            Write-Warn "$VarName 건너뜀 (이 스킬에 필요합니다)"
             return $false
         }
     }
 
     $script:EnvVarsAdded[$VarName] = $value
-    Write-Success "Set $VarName"
+    Write-Success "$VarName 설정 완료"
     return $true
 }
 
 function Configure-EnvironmentVariables {
     if (-not (Test-CanPrompt)) {
-        Write-Info "Skipping environment variable setup in non-interactive mode"
+        Write-Info "비대화형 모드로 환경변수 설정을 건너뜁니다"
         return
     }
 
     Write-Host ""
     Write-Host "================================" -ForegroundColor Cyan
-    Write-Host "   Environment Variables Setup" -ForegroundColor Cyan
+    Write-Host "   환경변수 설정" -ForegroundColor Cyan
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "설치된 스킬에 필요한 환경변수를 설정합니다."
@@ -1117,7 +1120,7 @@ function Configure-EnvironmentVariables {
     }
     else {
         Write-Host ""
-        Write-Info "No environment variables were configured"
+        Write-Info "환경변수가 설정되지 않았습니다"
     }
 }
 
@@ -1161,7 +1164,7 @@ function Save-EnvironmentVariables {
 function Main {
     Write-Host ""
     Write-Host "================================" -ForegroundColor Cyan
-    Write-Host "   NDS Skills Installer" -ForegroundColor Cyan
+    Write-Host "   NDS 스킬 설치기" -ForegroundColor Cyan
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -1171,20 +1174,20 @@ function Main {
     # Interactive selection if no agents specified
     if ($SelectedAgents.Count -eq 0) {
         if ($NoInteractive) {
-            Write-Info "No interactive mode requested, installing to all agents"
+            Write-Info "비대화형 모드로 실행 중, 모든 에이전트에 설치합니다"
             $SelectedAgents = $AgentOrder.Clone()
         }
         # Check if running interactively
         elseif (Test-CanPrompt) {
-            $SelectedAgents = Show-MultiSelectMenu -Title "Select coding agents to install skills:"
+            $SelectedAgents = Show-MultiSelectMenu -Title "스킬을 설치할 코딩 에이전트를 선택하세요:"
 
             if ($SelectedAgents.Count -eq 0) {
-                Write-Warn "No agents selected"
+                Write-Warn "에이전트가 선택되지 않았습니다"
                 exit 0
             }
         }
         else {
-            Write-Info "No interactive console available, installing to all agents"
+            Write-Info "대화형 콘솔을 사용할 수 없어 모든 에이전트에 설치합니다"
             $SelectedAgents = $AgentOrder.Clone()
         }
     }
@@ -1200,9 +1203,9 @@ function Main {
         }
     }
 
-    Write-Info "Source: $NexusBaseUrl"
+    Write-Info "소스: $NexusBaseUrl"
     Write-Host ""
-    Write-Info "Selected agents:"
+    Write-Info "선택된 에이전트:"
     foreach ($agent in $finalAgents) {
         $name = $AgentConfig[$agent].Name
         $path = $AgentConfig[$agent].Path
@@ -1222,11 +1225,11 @@ function Main {
     Write-Host "================================" -ForegroundColor Cyan
 
     if ($installFailed) {
-        Write-Err "Installation completed with errors"
+        Write-Err "설치가 오류와 함께 완료되었습니다"
         exit 1
     }
 
-    Write-Success "Skills installation complete!"
+    Write-Success "스킬 설치 완료!"
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -1237,11 +1240,11 @@ function Main {
     Configure-EnvironmentVariables
 
     Write-Host ""
-    Write-Host "Next steps:"
-    Write-Host "  1. Restart your coding agent"
-    Write-Host "  2. Restart PowerShell to apply environment variables"
+    Write-Host "다음 단계:"
+    Write-Host "  1. 코딩 에이전트를 재시작하세요"
+    Write-Host "  2. 환경변수를 적용하려면 PowerShell을 재시작하세요"
     if ($script:PythonCmd) {
-        Write-Host "  3. Python dependencies have been installed for skills"
+        Write-Host "  3. 스킬에 필요한 Python 의존성이 설치되었습니다"
     }
     Write-Host ""
 }
