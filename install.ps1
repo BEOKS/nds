@@ -55,6 +55,7 @@ param(
     [switch]$All,
     [switch]$List,
     [string]$Skills,
+    [switch]$NoInteractive,
     [switch]$Help
 )
 
@@ -136,8 +137,9 @@ Usage:
     irm <url>/install.ps1 | iex
 
 Environment Variables:
-    NDS_AGENTS         Comma-separated agents: claude,cursor,codex,gemini,antigravity (or "all")
+    NDS_AGENTS         Comma-separated agents: claude,cursor,codex,gemini,antigravity,copilot (or "all")
     NDS_SKILLS         Comma-separated list of skills to install
+    NDS_NO_INTERACTIVE Skip TUI selection when set to "true"
     NDS_GITLAB_HOST    GitLab host (default: gitlab.gabia.com)
     NDS_GITLAB_PROJECT GitLab project path (default: gabia/idc/nds)
     NDS_BRANCH         Branch to use (default: main)
@@ -164,6 +166,10 @@ Examples:
 
     # Install specific skills
     `$env:NDS_SKILLS = "gabia-dev-mcp-oracle,pptx"
+    irm <url>/install.ps1 | iex
+
+    # Skip interactive prompts
+    `$env:NDS_NO_INTERACTIVE = "true"
     irm <url>/install.ps1 | iex
 
     # List available skills
@@ -202,6 +208,10 @@ if ($env:NDS_SKILLS -and -not $Skills) {
 
 if ($env:NDS_LIST -eq "true") {
     $List = $true
+}
+
+if ($env:NDS_NO_INTERACTIVE -match "^(?i:true|1|yes|y)$") {
+    $NoInteractive = $true
 }
 
 # Remove duplicates
@@ -339,31 +349,38 @@ function Show-MultiSelectMenu {
 # Get available skills list
 # ============================================================================
 function Get-SkillsList {
-    $manifestUrl = "https://$GitLabHost/$GitLabProject/-/raw/$Branch/skills/manifest.txt"
+    $manifestUrls = @(
+        "$NexusBaseUrl/manifest.txt",
+        "https://$GitLabHost/$GitLabProject/-/raw/$Branch/skills/manifest.txt"
+    )
 
-    try {
-        $manifest = Invoke-RestMethod -Uri $manifestUrl -ErrorAction Stop
-        # Check if response is valid (not HTML)
-        if ($manifest -and -not $manifest.StartsWith("<!DOCTYPE") -and -not $manifest.StartsWith("<html")) {
-            return ($manifest -split "`n" | Where-Object { $_.Trim() -ne "" })
+    foreach ($manifestUrl in $manifestUrls) {
+        try {
+            $response = Invoke-WebRequest -Uri $manifestUrl -ErrorAction Stop
+            $manifest = $response.Content
+            # Check if response is valid (not HTML)
+            if ($manifest -and -not $manifest.StartsWith("<!DOCTYPE") -and -not $manifest.StartsWith("<html")) {
+                return ($manifest -split '\r?\n' | Where-Object { $_.Trim() -ne "" })
+            }
+        }
+        catch {
         }
     }
-    catch {
-    }
 
-    # Fallback to hardcoded list
+    # Fallback to current manifest snapshot
     return @(
         "algorithmic-art"
         "board-resolver"
         "brand-guidelines"
         "canvas-design"
         "code-simplifier"
-        "dev-plan"
-        "divide-conquer-tasks"
+        "composition-patterns"
+        "cve-scan"
         "doc-coauthoring"
         "docx"
         "frontend-design"
         "gabia-dev-mcp-confluence"
+        "gabia-dev-mcp-elasticsearch"
         "gabia-dev-mcp-figma"
         "gabia-dev-mcp-gitlab-issues"
         "gabia-dev-mcp-gitlab-merge-requests"
@@ -371,18 +388,28 @@ function Get-SkillsList {
         "gabia-dev-mcp-memory"
         "gabia-dev-mcp-mysql"
         "gabia-dev-mcp-oracle"
+        "gabia-dev-mcp-sentry"
+        "git-worktree"
+        "gitlab-review"
+        "hiworks-mail"
+        "hiworks-ui"
         "hiworks-memo"
         "internal-comms"
         "mac-cron"
         "mcp-builder"
+        "obsidian-writer"
         "pdf"
         "pptx"
+        "react-best-practices"
+        "react-native-skills"
         "skill-creator"
         "slack-gif-creator"
         "theme-factory"
+        "tmux-review"
+        "vercel-deploy-claimable"
         "web-artifacts-builder"
+        "web-design-guidelines"
         "webapp-testing"
-        "work-logger"
         "xlsx"
     )
 }
@@ -582,60 +609,99 @@ function Install-PythonDependencies {
         return
     }
 
-    Write-Host ""
-    Write-Info "Installing Python dependencies..."
+    function Get-RequirementsFile {
+        param(
+            [string]$FileName
+        )
 
-    # Download requirements.txt
-    $reqUrl = "$NexusBaseUrl/requirements.txt"
-    $reqFile = Join-Path $env:TEMP "nds-requirements.txt"
+        $localFile = Join-Path $env:TEMP "nds-$FileName"
+        $urls = @(
+            "$NexusBaseUrl/$FileName",
+            "https://$GitLabHost/$GitLabProject/-/raw/$Branch/$FileName"
+        )
 
-    try {
-        Invoke-WebRequest -Uri $reqUrl -OutFile $reqFile -ErrorAction Stop
-        Write-Info "Downloaded requirements.txt from Nexus"
+        foreach ($url in $urls) {
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $localFile -ErrorAction Stop
+                Write-Info "Downloaded $FileName from $url"
+                return $localFile
+            }
+            catch {
+            }
+        }
+
+        return $null
     }
-    catch {
-        # Fallback: try GitLab
-        $reqUrl = "https://$GitLabHost/$GitLabProject/-/raw/$Branch/requirements.txt"
+
+    function Invoke-RequirementsInstall {
+        param(
+            [string]$ReqFile,
+            [string]$DisplayName,
+            [bool]$Optional = $false
+        )
+
         try {
-            Invoke-WebRequest -Uri $reqUrl -OutFile $reqFile -ErrorAction Stop
-            Write-Info "Downloaded requirements.txt from GitLab"
+            if ($script:PipCmd -eq "py -3 -m pip") {
+                $process = Start-Process -FilePath "py" -ArgumentList "-3", "-m", "pip", "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
+            }
+            elseif ($script:PipCmd -match "-m pip$") {
+                $process = Start-Process -FilePath $script:PythonCmd -ArgumentList "-m", "pip", "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
+            }
+            else {
+                $process = Start-Process -FilePath "pip" -ArgumentList "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
+            }
+
+            if ($process.ExitCode -eq 0) {
+                Write-Success "$DisplayName installed successfully"
+                return $true
+            }
+
+            if ($Optional) {
+                Write-Warn "$DisplayName could not be installed (exit code: $($process.ExitCode))"
+                Write-Warn "These packages are optional and only needed for specific skills"
+            }
+            else {
+                Write-Warn "Some Python dependencies may have failed to install (exit code: $($process.ExitCode))"
+                Write-Warn "You can manually install them later with:"
+                Write-Host "  pip install --user -r requirements.txt"
+            }
+            return $false
         }
         catch {
-            Write-Warn "Could not download requirements.txt"
-            return
+            if ($Optional) {
+                Write-Warn "Failed to install $DisplayName: $_"
+            }
+            else {
+                Write-Warn "Failed to install Python dependencies: $_"
+                Write-Warn "You can manually install them later with:"
+                Write-Host "  pip install --user -r requirements.txt"
+            }
+            return $false
         }
     }
 
-    # Install dependencies
+    Write-Host ""
     Write-Info "Installing packages (this may take a few minutes)..."
 
+    $reqFile = Get-RequirementsFile -FileName "requirements.txt"
+    if (-not $reqFile) {
+        Write-Warn "Could not download requirements.txt"
+        return
+    }
+
     try {
-        # Build and execute pip install command based on detected pip
-        if ($script:PipCmd -eq "py -3 -m pip") {
-            $process = Start-Process -FilePath "py" -ArgumentList "-3", "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
-        }
-        elseif ($script:PipCmd -match "-m pip$") {
-            # Using python -m pip
-            $process = Start-Process -FilePath $script:PythonCmd -ArgumentList "-m", "pip", "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
-        }
-        else {
-            # Direct pip command (shouldn't happen with current logic, but kept for safety)
-            $process = Start-Process -FilePath "pip" -ArgumentList "install", "--user", "-r", $reqFile -NoNewWindow -PassThru -Wait
+        $installed = Invoke-RequirementsInstall -ReqFile $reqFile -DisplayName "Python dependencies"
+
+        if (-not $installed) {
+            return
         }
 
-        if ($process.ExitCode -eq 0) {
-            Write-Success "Python dependencies installed successfully"
+        $optReqFile = Get-RequirementsFile -FileName "requirements-optional.txt"
+        if ($optReqFile) {
+            Write-Info "Installing optional dependencies (mcp, anthropic)..."
+            Invoke-RequirementsInstall -ReqFile $optReqFile -DisplayName "Optional dependencies" -Optional $true | Out-Null
+            Remove-Item $optReqFile -Force -ErrorAction SilentlyContinue
         }
-        else {
-            Write-Warn "Some Python dependencies may have failed to install (exit code: $($process.ExitCode))"
-            Write-Warn "You can manually install them later with:"
-            Write-Host "  pip install -r requirements.txt"
-        }
-    }
-    catch {
-        Write-Warn "Failed to install Python dependencies: $_"
-        Write-Warn "You can manually install them later with:"
-        Write-Host "  pip install -r requirements.txt"
     }
     finally {
         if (Test-Path $reqFile) {
@@ -647,6 +713,60 @@ function Install-PythonDependencies {
 # ============================================================================
 # Download and install skills
 # ============================================================================
+function Test-SkillsSourceRoot {
+    param(
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path -PathType Container)) {
+        return $false
+    }
+
+    if (Test-Path (Join-Path $Path "manifest.txt") -PathType Leaf) {
+        return $true
+    }
+
+    $hasSkillFile = Get-ChildItem -Path $Path -File -Filter "*.skill" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($hasSkillFile) {
+        return $true
+    }
+
+    $hasSkillDir = Get-ChildItem -Path $Path -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") -PathType Leaf } |
+        Select-Object -First 1
+
+    return [bool]$hasSkillDir
+}
+
+function Resolve-SkillsArchiveRoot {
+    param(
+        [string]$ExtractedDir
+    )
+
+    if (Test-SkillsSourceRoot -Path $ExtractedDir) {
+        return $ExtractedDir
+    }
+
+    $skillsDir = Get-ChildItem -Path $ExtractedDir -Recurse -Directory -Filter "skills" -ErrorAction SilentlyContinue |
+        Sort-Object FullName |
+        Where-Object { Test-SkillsSourceRoot -Path $_.FullName } |
+        Select-Object -First 1
+    if ($skillsDir) {
+        return $skillsDir.FullName
+    }
+
+    $candidateDir = Get-ChildItem -Path $ExtractedDir -Recurse -Directory -ErrorAction SilentlyContinue |
+        Sort-Object { $_.FullName.Length } |
+        Where-Object { Test-SkillsSourceRoot -Path $_.FullName } |
+        Select-Object -First 1
+    if ($candidateDir) {
+        return $candidateDir.FullName
+    }
+
+    return $null
+}
+
 function Install-Skills {
     param(
         [string]$TargetDir
@@ -674,10 +794,10 @@ function Install-Skills {
         Write-Info "Extracting..."
         Expand-Archive -Path $archiveFile -DestinationPath $tempDir -Force
 
-        # Find skills directory
-        $skillsDir = Get-ChildItem -Path $tempDir -Recurse -Directory -Filter "skills" | Select-Object -First 1
+        # 아카이브 구조가 달라도 실제 skills source root를 찾는다.
+        $skillsRoot = Resolve-SkillsArchiveRoot -ExtractedDir $tempDir
 
-        if (-not $skillsDir) {
+        if (-not $skillsRoot) {
             Write-Err "Skills directory not found in archive"
             return $false
         }
@@ -696,8 +816,8 @@ function Install-Skills {
         foreach ($skill in $skillsToInstall) {
             if ([string]::IsNullOrWhiteSpace($skill)) { continue }
 
-            $srcSkillDir = Join-Path $skillsDir.FullName $skill
-            $srcSkillFile = Join-Path $skillsDir.FullName "$skill.skill"
+            $srcSkillDir = Join-Path $skillsRoot $skill
+            $srcSkillFile = Join-Path $skillsRoot "$skill.skill"
             $destSkillDir = Join-Path $TargetDir $skill
             $destSkillFile = Join-Path $TargetDir "$skill.skill"
 
@@ -990,8 +1110,12 @@ function Main {
 
     # Interactive selection if no agents specified
     if ($SelectedAgents.Count -eq 0) {
+        if ($NoInteractive) {
+            Write-Info "No interactive mode requested, installing to all agents"
+            $SelectedAgents = $AgentOrder.Clone()
+        }
         # Check if running interactively
-        if ([Environment]::UserInteractive -and [Console]::WindowHeight -gt 0) {
+        elseif ([Environment]::UserInteractive -and [Console]::WindowHeight -gt 0) {
             $SelectedAgents = Show-MultiSelectMenu -Title "Select coding agents to install skills:"
 
             if ($SelectedAgents.Count -eq 0) {
@@ -1000,38 +1124,8 @@ function Main {
             }
         }
         else {
-            # Non-interactive fallback
-            Write-Host "Available coding agents:"
-            Write-Host "  1) Claude Code  (~/.claude/skills)"
-            Write-Host "  2) Cursor       (~/.claude/skills)"
-            Write-Host "  3) Codex CLI    (~/.codex/skills)"
-            Write-Host "  4) Gemini CLI   (~/.gemini/skills)"
-            Write-Host "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
-            Write-Host "  6) Copilot      (~/.claude/skills)"
-            Write-Host ""
-            $selection = Read-Host "Enter numbers separated by space (e.g., '1 3 4') or 'all'"
-
-            if ($selection -eq "all") {
-                $SelectedAgents = $AgentOrder.Clone()
-            }
-            else {
-                $nums = $selection -split '\s+'
-                foreach ($num in $nums) {
-                    switch ($num.Trim()) {
-                        "1" { $SelectedAgents += "claude" }
-                        "2" { $SelectedAgents += "cursor" }
-                        "3" { $SelectedAgents += "codex" }
-                        "4" { $SelectedAgents += "gemini" }
-                        "5" { $SelectedAgents += "antigravity" }
-                        "6" { $SelectedAgents += "copilot" }
-                    }
-                }
-            }
-
-            if ($SelectedAgents.Count -eq 0) {
-                Write-Warn "No agents selected"
-                exit 0
-            }
+            Write-Info "No interactive console available, installing to all agents"
+            $SelectedAgents = $AgentOrder.Clone()
         }
     }
 
