@@ -62,6 +62,63 @@ param(
     [switch]$Help
 )
 
+function Initialize-Utf8Console {
+    try {
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [Console]::InputEncoding = $utf8NoBom
+        [Console]::OutputEncoding = $utf8NoBom
+        $OutputEncoding = $utf8NoBom
+    }
+    catch {
+    }
+}
+
+function Get-InstallerSourceText {
+    param([string]$ScriptPath)
+
+    if ($ScriptPath -and (Test-Path -LiteralPath $ScriptPath)) {
+        return [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($ScriptPath))
+    }
+
+    $installerUrl = if ($env:NDS_INSTALLER_URL) {
+        $env:NDS_INSTALLER_URL
+    }
+    elseif ($env:NDS_NEXUS_URL) {
+        ($env:NDS_NEXUS_URL.TrimEnd('/') + "/install.ps1")
+    }
+    else {
+        "https://repo.gabia.com/repository/raw-repository/nds/install.ps1"
+    }
+
+    $webClient = New-Object System.Net.WebClient
+    try {
+        return [System.Text.Encoding]::UTF8.GetString($webClient.DownloadData($installerUrl))
+    }
+    finally {
+        $webClient.Dispose()
+    }
+}
+
+if (($PSVersionTable.PSEdition -eq "Desktop") -and (-not $env:NDS_UTF8_BOOTSTRAPPED)) {
+    Initialize-Utf8Console
+    $env:NDS_UTF8_BOOTSTRAPPED = "1"
+    $scriptText = Get-InstallerSourceText -ScriptPath $MyInvocation.MyCommand.Path
+    $scriptText = $scriptText.TrimStart([char]0xFEFF)
+    $tokens = $null
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($scriptText, [ref]$tokens, [ref]$errors)
+    if ($errors.Count -gt 0) {
+        throw $errors[0]
+    }
+
+    $bodyOffset = if ($ast.ParamBlock) { $ast.ParamBlock.Extent.EndOffset } else { 0 }
+    $scriptBody = $scriptText.Substring($bodyOffset)
+    Invoke-Expression $scriptBody
+    return
+}
+
+Initialize-Utf8Console
+
 # ============================================================================
 # Configuration
 # ============================================================================
