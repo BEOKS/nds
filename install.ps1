@@ -67,33 +67,76 @@ $GitLabHost = if ($env:NDS_GITLAB_HOST) { $env:NDS_GITLAB_HOST } else { "gitlab.
 $GitLabProject = if ($env:NDS_GITLAB_PROJECT) { $env:NDS_GITLAB_PROJECT } else { "gabia/idc/nds" }
 $Branch = if ($env:NDS_BRANCH) { $env:NDS_BRANCH } else { "main" }
 
+function Get-UserHomePath {
+    foreach ($candidate in @(
+        $env:USERPROFILE,
+        $HOME,
+        [Environment]::GetFolderPath("UserProfile")
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
+    }
+
+    throw "Could not determine the user home directory."
+}
+
+function Get-TempPathSafe {
+    foreach ($candidate in @(
+        $env:TEMP,
+        $env:TMP,
+        [IO.Path]::GetTempPath()
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
+    }
+
+    throw "Could not determine a temporary directory."
+}
+
+function Test-CanPrompt {
+    if ($NoInteractive) {
+        return $false
+    }
+
+    try {
+        return [Environment]::UserInteractive -and ([Console]::WindowHeight -gt 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+$UserHomePath = Get-UserHomePath
+
 # ============================================================================
 # Agent configurations
 # ============================================================================
 $AgentConfig = @{
     "claude" = @{
         Name = "Claude Code"
-        Path = Join-Path $env:USERPROFILE ".claude\skills"
+        Path = Join-Path $UserHomePath ".claude\skills"
     }
     "cursor" = @{
         Name = "Cursor"
-        Path = Join-Path $env:USERPROFILE ".claude\skills"
+        Path = Join-Path $UserHomePath ".claude\skills"
     }
     "codex" = @{
         Name = "Codex CLI"
-        Path = Join-Path $env:USERPROFILE ".codex\skills"
+        Path = Join-Path $UserHomePath ".codex\skills"
     }
     "gemini" = @{
         Name = "Gemini CLI"
-        Path = Join-Path $env:USERPROFILE ".gemini\skills"
+        Path = Join-Path $UserHomePath ".gemini\skills"
     }
     "antigravity" = @{
         Name = "Antigravity"
-        Path = Join-Path $env:USERPROFILE ".gemini\antigravity\global_skills"
+        Path = Join-Path $UserHomePath ".gemini\antigravity\global_skills"
     }
     "copilot" = @{
         Name = "GitHub Copilot"
-        Path = Join-Path $env:USERPROFILE ".claude\skills"
+        Path = Join-Path $UserHomePath ".claude\skills"
     }
 }
 
@@ -216,6 +259,18 @@ if ($env:NDS_NO_INTERACTIVE -match "^(?i:true|1|yes|y)$") {
 
 # Remove duplicates
 $SelectedAgents = $SelectedAgents | Select-Object -Unique
+
+$InvalidAgents = @(
+    $SelectedAgents |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $AgentConfig.ContainsKey($_) } |
+        Select-Object -Unique
+)
+
+if ($InvalidAgents.Count -gt 0) {
+    Write-Err "Unknown agents: $($InvalidAgents -join ', ')"
+    Write-Info "Valid agents: $($AgentOrder -join ', ')"
+    exit 1
+}
 
 # ============================================================================
 # TUI Multi-select Menu
@@ -435,39 +490,41 @@ if ($List) {
 # Python installation and dependency management
 # ============================================================================
 $script:PythonCmd = $null
+$script:PythonArgs = @()
+$script:PythonDisplay = $null
 $script:PipCmd = $null
 $script:SkipPython = $false
+
+function Invoke-Python {
+    param(
+        [string[]]$ArgumentList
+    )
+
+    & $script:PythonCmd @script:PythonArgs @ArgumentList
+}
 
 function Find-Python {
     # Try py launcher first (Windows-specific), then python3, then python
     $pythonPaths = @(
-        "py -3",
-        "python3",
-        "python",
-        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
-        "$env:ProgramFiles\Python312\python.exe",
-        "$env:ProgramFiles\Python311\python.exe",
-        "$env:ProgramFiles\Python310\python.exe"
+        @{ FilePath = "py"; Args = @("-3"); Display = "py -3" }
+        @{ FilePath = "python3"; Args = @(); Display = "python3" }
+        @{ FilePath = "python"; Args = @(); Display = "python" }
+        @{ FilePath = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"; Args = @(); Display = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" }
+        @{ FilePath = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"; Args = @(); Display = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" }
+        @{ FilePath = "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe"; Args = @(); Display = "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe" }
+        @{ FilePath = "$env:ProgramFiles\Python312\python.exe"; Args = @(); Display = "$env:ProgramFiles\Python312\python.exe" }
+        @{ FilePath = "$env:ProgramFiles\Python311\python.exe"; Args = @(); Display = "$env:ProgramFiles\Python311\python.exe" }
+        @{ FilePath = "$env:ProgramFiles\Python310\python.exe"; Args = @(); Display = "$env:ProgramFiles\Python310\python.exe" }
     )
 
     foreach ($pythonPath in $pythonPaths) {
         try {
-            if ($pythonPath -eq "py -3") {
-                # Special handling for py launcher
-                $version = & py -3 --version 2>&1
-                if ($version -match "Python 3") {
-                    $script:PythonCmd = "py -3"
-                    break
-                }
-            }
-            else {
-                $version = & $pythonPath --version 2>&1
-                if ($version -match "Python 3") {
-                    $script:PythonCmd = $pythonPath
-                    break
-                }
+            $version = & $pythonPath.FilePath @($pythonPath.Args + @("--version")) 2>&1
+            if ($version -match "Python 3") {
+                $script:PythonCmd = $pythonPath.FilePath
+                $script:PythonArgs = @($pythonPath.Args)
+                $script:PythonDisplay = $pythonPath.Display
+                break
             }
         }
         catch {
@@ -478,18 +535,12 @@ function Find-Python {
     if ($script:PythonCmd) {
         # Always prefer python -m pip to ensure pip matches Python version
         try {
-            if ($script:PythonCmd -eq "py -3") {
-                & py -3 -m pip --version 2>&1 | Out-Null
-                $script:PipCmd = "py -3 -m pip"
-            }
-            else {
-                & $script:PythonCmd -m pip --version 2>&1 | Out-Null
-                $script:PipCmd = "$script:PythonCmd -m pip"
-            }
+            Invoke-Python -ArgumentList @("-m", "pip", "--version") 2>&1 | Out-Null
+            $script:PipCmd = "$script:PythonDisplay -m pip"
             return $true
         }
         catch {
-            Write-Warn "pip not available for $script:PythonCmd"
+            Write-Warn "pip not available for $script:PythonDisplay"
         }
         return $true
     }
@@ -499,7 +550,7 @@ function Find-Python {
 
 function Get-PythonVersion {
     if ($script:PythonCmd) {
-        $version = & $script:PythonCmd --version 2>&1
+        $version = Invoke-Python -ArgumentList @("--version") 2>&1
         if ($version -match "Python (\d+\.\d+\.\d+)") {
             return $matches[1]
         }
@@ -564,7 +615,7 @@ function Test-AndInstallPython {
 
     if (Find-Python) {
         $version = Get-PythonVersion
-        Write-Success "Python found: $script:PythonCmd (version $version)"
+        Write-Success "Python found: $script:PythonDisplay (version $version)"
 
         if ($script:PipCmd) {
             Write-Success "pip found: $script:PipCmd"
@@ -581,6 +632,12 @@ function Test-AndInstallPython {
     Write-Host "Python is required for many NDS skills to work properly."
     Write-Host ""
 
+    if (-not (Test-CanPrompt)) {
+        Write-Warn "Skipping Python installation because interactive prompts are unavailable."
+        $script:SkipPython = $true
+        return $false
+    }
+
     $answer = Read-Host "Would you like to install Python automatically? (y/n)"
 
     if ($answer -match "^[Yy]") {
@@ -589,7 +646,7 @@ function Test-AndInstallPython {
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
             if (Find-Python) {
-                Write-Success "Python installed successfully: $script:PythonCmd"
+                Write-Success "Python installed successfully: $script:PythonDisplay"
                 return $true
             }
         }
@@ -614,7 +671,7 @@ function Install-PythonDependencies {
             [string]$FileName
         )
 
-        $localFile = Join-Path $env:TEMP "nds-$FileName"
+        $localFile = Join-Path (Get-TempPathSafe) "nds-$FileName"
         $urls = @(
             "$NexusBaseUrl/$FileName",
             "https://$GitLabHost/$GitLabProject/-/raw/$Branch/$FileName"
@@ -623,6 +680,11 @@ function Install-PythonDependencies {
         foreach ($url in $urls) {
             try {
                 Invoke-WebRequest -Uri $url -OutFile $localFile -ErrorAction Stop
+                $contentPreview = Get-Content -Path $localFile -TotalCount 1 -ErrorAction SilentlyContinue
+                if ($contentPreview -match '^(<!DOCTYPE|<html)') {
+                    Remove-Item $localFile -Force -ErrorAction SilentlyContinue
+                    continue
+                }
                 Write-Info "Downloaded $FileName from $url"
                 return $localFile
             }
@@ -641,15 +703,8 @@ function Install-PythonDependencies {
         )
 
         try {
-            if ($script:PipCmd -eq "py -3 -m pip") {
-                $process = Start-Process -FilePath "py" -ArgumentList "-3", "-m", "pip", "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
-            }
-            elseif ($script:PipCmd -match "-m pip$") {
-                $process = Start-Process -FilePath $script:PythonCmd -ArgumentList "-m", "pip", "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
-            }
-            else {
-                $process = Start-Process -FilePath "pip" -ArgumentList "install", "--user", "-r", $ReqFile -NoNewWindow -PassThru -Wait
-            }
+            $pipArgs = @($script:PythonArgs + @("-m", "pip", "install", "--user", "-r", $ReqFile))
+            $process = Start-Process -FilePath $script:PythonCmd -ArgumentList $pipArgs -NoNewWindow -PassThru -Wait
 
             if ($process.ExitCode -eq 0) {
                 Write-Success "$DisplayName installed successfully"
@@ -669,7 +724,7 @@ function Install-PythonDependencies {
         }
         catch {
             if ($Optional) {
-                Write-Warn "Failed to install $DisplayName: $_"
+                Write-Warn "Failed to install ${DisplayName}: $_"
             }
             else {
                 Write-Warn "Failed to install Python dependencies: $_"
@@ -772,7 +827,7 @@ function Install-Skills {
         [string]$TargetDir
     )
 
-    $tempDir = Join-Path $env:TEMP "nds_install_$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    $tempDir = Join-Path (Get-TempPathSafe) "nds_install_$([guid]::NewGuid().ToString('N').Substring(0,8))"
 
     try {
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
@@ -937,6 +992,11 @@ function Prompt-EnvVar {
 }
 
 function Configure-EnvironmentVariables {
+    if (-not (Test-CanPrompt)) {
+        Write-Info "Skipping environment variable setup in non-interactive mode"
+        return
+    }
+
     Write-Host ""
     Write-Host "================================" -ForegroundColor Cyan
     Write-Host "   Environment Variables Setup" -ForegroundColor Cyan
@@ -948,7 +1008,7 @@ function Configure-EnvironmentVariables {
 
     # GitLab Token
     Write-Host "[GitLab - Issues & Merge Requests]" -ForegroundColor White
-    Prompt-EnvVar -VarName "GITLAB_TOKEN" `
+    $null = Prompt-EnvVar -VarName "GITLAB_TOKEN" `
         -Description "GitLab 액세스 토큰 (Issues, MR 스킬에 필요)" `
         -TokenUrl "https://gitlab.gabia.com/-/profile/personal_access_tokens" `
         -IsOptional $true
@@ -956,11 +1016,11 @@ function Configure-EnvironmentVariables {
     # Confluence
     Write-Host ""
     Write-Host "[Confluence]" -ForegroundColor White
-    Prompt-EnvVar -VarName "CONFLUENCE_BASE_URL" `
+    $null = Prompt-EnvVar -VarName "CONFLUENCE_BASE_URL" `
         -Description "Confluence 서버 베이스 URL (예: https://confluence.gabia.com)" `
         -IsOptional $true
 
-    Prompt-EnvVar -VarName "ATLASSIAN_OAUTH_ACCESS_TOKEN" `
+    $null = Prompt-EnvVar -VarName "ATLASSIAN_OAUTH_ACCESS_TOKEN" `
         -Description "Confluence 개인용 액세스 토큰 (Bearer 인증). confluence.gabia.com 사용 시 https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action 에서 발급한 토큰을 입력하세요." `
         -TokenUrl "https://confluence.gabia.com/plugins/personalaccesstokens/usertokens.action" `
         -IsOptional $true
@@ -968,33 +1028,33 @@ function Configure-EnvironmentVariables {
     # Mattermost Token
     Write-Host ""
     Write-Host "[Mattermost]" -ForegroundColor White
-    Prompt-EnvVar -VarName "MATTERMOST_TOKEN" `
+    $null = Prompt-EnvVar -VarName "MATTERMOST_TOKEN" `
         -Description "Mattermost 액세스 토큰" `
         -IsOptional $true
 
     # Figma Token
     Write-Host ""
     Write-Host "[Figma]" -ForegroundColor White
-    Prompt-EnvVar -VarName "FIGMA_API_KEY" `
+    $null = Prompt-EnvVar -VarName "FIGMA_API_KEY" `
         -Description "Figma API 키" `
         -IsOptional $true
 
     # Sentry
     Write-Host ""
     Write-Host "[Sentry]" -ForegroundColor White
-    Prompt-EnvVar -VarName "SENTRY_TOKEN" `
+    $null = Prompt-EnvVar -VarName "SENTRY_TOKEN" `
         -Description "Sentry Auth Token (event:read 스코프 필요)" `
         -IsOptional $true
 
     # Elasticsearch / Kibana
     Write-Host ""
     Write-Host "[Elasticsearch / Kibana]" -ForegroundColor White
-    Prompt-EnvVar -VarName "LDAP_USER" `
+    $null = Prompt-EnvVar -VarName "LDAP_USER" `
         -Description "LDAP 사용자 ID (nginx Basic Auth)" `
         -IsOptional $true
 
     if ($script:EnvVarsAdded.ContainsKey("LDAP_USER")) {
-        Prompt-EnvVar -VarName "LDAP_PWD" `
+        $null = Prompt-EnvVar -VarName "LDAP_PWD" `
             -Description "LDAP 비밀번호" `
             -IsOptional $true
     }
@@ -1002,15 +1062,15 @@ function Configure-EnvironmentVariables {
     # Hiworks 쪽지
     Write-Host ""
     Write-Host "[Hiworks 쪽지]" -ForegroundColor White
-    Prompt-EnvVar -VarName "HIWORKS_ID" `
+    $null = Prompt-EnvVar -VarName "HIWORKS_ID" `
         -Description "Hiworks 사용자 ID (이메일의 @ 앞부분)" `
         -IsOptional $true
 
     if ($script:EnvVarsAdded.ContainsKey("HIWORKS_ID")) {
-        Prompt-EnvVar -VarName "HIWORKS_DOMAIN" `
+        $null = Prompt-EnvVar -VarName "HIWORKS_DOMAIN" `
             -Description "Hiworks 도메인 (예: company.com)" `
             -IsOptional $true
-        Prompt-EnvVar -VarName "HIWORKS_PWD" `
+        $null = Prompt-EnvVar -VarName "HIWORKS_PWD" `
             -Description "Hiworks 비밀번호" `
             -IsOptional $true
     }
@@ -1018,16 +1078,16 @@ function Configure-EnvironmentVariables {
     # Oracle DB
     Write-Host ""
     Write-Host "[Oracle DB]" -ForegroundColor White
-    Prompt-EnvVar -VarName "ORACLE_HOST" `
+    $null = Prompt-EnvVar -VarName "ORACLE_HOST" `
         -Description "Oracle DB 호스트" `
         -IsOptional $true
 
     # Only ask for other Oracle vars if host was provided
     if ($script:EnvVarsAdded.ContainsKey("ORACLE_HOST")) {
-        Prompt-EnvVar -VarName "ORACLE_USERNAME" `
+        $null = Prompt-EnvVar -VarName "ORACLE_USERNAME" `
             -Description "Oracle DB 사용자명" `
             -IsOptional $true
-        Prompt-EnvVar -VarName "ORACLE_PASSWORD" `
+        $null = Prompt-EnvVar -VarName "ORACLE_PASSWORD" `
             -Description "Oracle DB 비밀번호" `
             -IsOptional $true
     }
@@ -1035,16 +1095,16 @@ function Configure-EnvironmentVariables {
     # MySQL DB
     Write-Host ""
     Write-Host "[MySQL DB]" -ForegroundColor White
-    Prompt-EnvVar -VarName "MYSQL_HOST" `
+    $null = Prompt-EnvVar -VarName "MYSQL_HOST" `
         -Description "MySQL DB 호스트 (단일 계정 사용 시)" `
         -IsOptional $true
 
     # Only ask for other MySQL vars if host was provided
     if ($script:EnvVarsAdded.ContainsKey("MYSQL_HOST")) {
-        Prompt-EnvVar -VarName "MYSQL_USERNAME" `
+        $null = Prompt-EnvVar -VarName "MYSQL_USERNAME" `
             -Description "MySQL DB 사용자명" `
             -IsOptional $true
-        Prompt-EnvVar -VarName "MYSQL_PASSWORD" `
+        $null = Prompt-EnvVar -VarName "MYSQL_PASSWORD" `
             -Description "MySQL DB 비밀번호" `
             -IsOptional $true
     }
@@ -1115,7 +1175,7 @@ function Main {
             $SelectedAgents = $AgentOrder.Clone()
         }
         # Check if running interactively
-        elseif ([Environment]::UserInteractive -and [Console]::WindowHeight -gt 0) {
+        elseif (Test-CanPrompt) {
             $SelectedAgents = Show-MultiSelectMenu -Title "Select coding agents to install skills:"
 
             if ($SelectedAgents.Count -eq 0) {
@@ -1143,7 +1203,7 @@ function Main {
     Write-Info "Source: $NexusBaseUrl"
     Write-Host ""
     Write-Info "Selected agents:"
-    foreach ($agent in $SelectedAgents) {
+    foreach ($agent in $finalAgents) {
         $name = $AgentConfig[$agent].Name
         $path = $AgentConfig[$agent].Path
         Write-Host "  * $name ($path)"
