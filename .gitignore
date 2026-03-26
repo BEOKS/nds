@@ -18,5 +18,7 @@ Thumbs.db
 # Logs
 *.log
 
+# Local agent state
+.omc/
 
 figma-output/
