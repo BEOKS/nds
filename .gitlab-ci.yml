@@ -1,8 +1,8 @@
 # NDS Skills 배포 파이프라인
 #
 # 목적:
-# - skills/ 디렉토리를 gabia-skills.zip으로 패키징
-# - install.sh, install.ps1, gabia-skills.zip을 Nexus(raw-repository)에 업로드
+# - skills/ 디렉토리를 nds-skills.zip으로 패키징
+# - install.sh, install.ps1, nds-skills.zip을 Nexus(raw-repository)에 업로드
 #
 # 사용자 설치 방법:
 #   macOS/Linux: curl -fsSL https://repo.gabia.com/repository/raw-repository/nds/install.sh | bash
@@ -47,14 +47,15 @@ deploy:skills:
     - cat skills/manifest.txt
 
     # skills 디렉토리를 zip으로 패키징
-    - echo "=== Packaging gabia-skills.zip ==="
-    - rm -f gabia-skills.zip
+    - echo "=== Packaging nds-skills.zip ==="
+    - rm -f nds-skills.zip gabia-skills.zip
     - cd skills
-    - zip -r ../gabia-skills.zip . -x "__pycache__/*" "*.pyc" ".DS_Store" "*.git*"
+    - zip -r ../nds-skills.zip . -x "__pycache__/*" "*.pyc" ".DS_Store" "*.git*"
     - cd ..
-    - ls -lh gabia-skills.zip
+    - cp nds-skills.zip gabia-skills.zip
+    - ls -lh nds-skills.zip
     - echo "=== Verifying zip contents ==="
-    - unzip -l gabia-skills.zip | head -50 || true
+    - unzip -l nds-skills.zip | head -50 || true
 
     # Nexus에 업로드
     - echo "=== Uploading install.sh ==="
@@ -65,7 +66,9 @@ deploy:skills:
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file requirements.txt "${NDS_NEXUS_URL}/requirements.txt"
     - echo "=== Uploading manifest.txt ==="
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file skills/manifest.txt "${NDS_NEXUS_URL}/manifest.txt"
-    - echo "=== Uploading gabia-skills.zip ==="
+    - echo "=== Uploading nds-skills.zip ==="
+    - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file nds-skills.zip "${NDS_NEXUS_URL}/nds-skills.zip"
+    - echo "=== Uploading legacy gabia-skills.zip ==="
     - curl --fail --silent --show-error -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" --upload-file gabia-skills.zip "${NDS_NEXUS_URL}/gabia-skills.zip"
 
     - echo "=== Deploy complete ==="
