@@ -9,6 +9,7 @@
 #   curl ... | bash -s -- --claude           # Install to Claude Code only
 #   curl ... | bash -s -- --cursor           # Install to Cursor only
 #   curl ... | bash -s -- --codex            # Install to Codex only
+#   curl ... | bash -s -- --opencode         # Install to OpenCode only
 #   curl ... | bash -s -- --gemini           # Install to Gemini CLI only
 #   curl ... | bash -s -- --antigravity      # Install to Antigravity only
 #   curl ... | bash -s -- --copilot          # Install to GitHub Copilot only
@@ -47,13 +48,14 @@ error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 # ============================================================================
 # Agent configurations (compatible with bash 3.2)
 # ============================================================================
-AGENT_KEYS="claude cursor codex gemini antigravity copilot"
+AGENT_KEYS="claude cursor codex opencode gemini antigravity copilot"
 
 get_agent_path() {
     case "$1" in
         claude)      echo "$HOME/.claude/skills" ;;
         cursor)      echo "$HOME/.claude/skills" ;;
         codex)       echo "$HOME/.codex/skills" ;;
+        opencode)    echo "$HOME/.config/opencode/skills" ;;
         gemini)      echo "$HOME/.gemini/skills" ;;
         antigravity) echo "$HOME/.gemini/antigravity/global_skills" ;;
         copilot)     echo "$HOME/.claude/skills" ;;
@@ -65,6 +67,7 @@ get_agent_name() {
         claude)      echo "Claude Code" ;;
         cursor)      echo "Cursor" ;;
         codex)       echo "Codex CLI" ;;
+        opencode)    echo "OpenCode" ;;
         gemini)      echo "Gemini CLI" ;;
         antigravity) echo "Antigravity" ;;
         copilot)     echo "GitHub Copilot" ;;
@@ -113,6 +116,11 @@ while [ $# -gt 0 ]; do
             INTERACTIVE=false
             shift
             ;;
+        --opencode)
+            SELECTED_AGENTS="$SELECTED_AGENTS opencode"
+            INTERACTIVE=false
+            shift
+            ;;
         --gemini)
             SELECTED_AGENTS="$SELECTED_AGENTS gemini"
             INTERACTIVE=false
@@ -129,7 +137,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --all)
-            SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
+            SELECTED_AGENTS="claude cursor codex opencode gemini antigravity copilot"
             INTERACTIVE=false
             shift
             ;;
@@ -162,6 +170,7 @@ NDS 스킬 설치기
   --claude           Claude Code에 설치 (~/.claude/skills)
   --cursor           Cursor에 설치 (~/.claude/skills)
   --codex            Codex CLI에 설치 (~/.codex/skills)
+  --opencode         OpenCode에 설치 (~/.config/opencode/skills)
   --gemini           Gemini CLI에 설치 (~/.gemini/skills)
   --antigravity      Antigravity에 설치 (~/.gemini/antigravity/global_skills)
   --copilot          GitHub Copilot에 설치 (~/.claude/skills)
@@ -518,12 +527,13 @@ install_python_dependencies() {
 # ============================================================================
 show_multiselect_menu() {
     local cursor=0
-    local num_options=6
+    local num_options=7
 
     # Selection states (0=unselected, 1=selected)
     local sel_claude=0
     local sel_cursor=0
     local sel_codex=0
+    local sel_opencode=0
     local sel_gemini=0
     local sel_antigravity=0
     local sel_copilot=0
@@ -547,7 +557,7 @@ show_multiselect_menu() {
 
         # Display options
         local i=0
-        for agent in claude cursor codex gemini antigravity copilot; do
+        for agent in claude cursor codex opencode gemini antigravity copilot; do
             local name=$(get_agent_name "$agent")
             local path=$(get_agent_path "$agent")
             local prefix="  "
@@ -565,6 +575,7 @@ show_multiselect_menu() {
                 claude)      is_selected=$sel_claude ;;
                 cursor)      is_selected=$sel_cursor ;;
                 codex)       is_selected=$sel_codex ;;
+                opencode)    is_selected=$sel_opencode ;;
                 gemini)      is_selected=$sel_gemini ;;
                 antigravity) is_selected=$sel_antigravity ;;
                 copilot)     is_selected=$sel_copilot ;;
@@ -606,16 +617,17 @@ show_multiselect_menu() {
                     0) sel_claude=$((1 - sel_claude)) ;;
                     1) sel_cursor=$((1 - sel_cursor)) ;;
                     2) sel_codex=$((1 - sel_codex)) ;;
-                    3) sel_gemini=$((1 - sel_gemini)) ;;
-                    4) sel_antigravity=$((1 - sel_antigravity)) ;;
-                    5) sel_copilot=$((1 - sel_copilot)) ;;
+                    3) sel_opencode=$((1 - sel_opencode)) ;;
+                    4) sel_gemini=$((1 - sel_gemini)) ;;
+                    5) sel_antigravity=$((1 - sel_antigravity)) ;;
+                    6) sel_copilot=$((1 - sel_copilot)) ;;
                 esac
                 ;;
             'a'|'A')  # Select all
-                sel_claude=1; sel_cursor=1; sel_codex=1; sel_gemini=1; sel_antigravity=1; sel_copilot=1
+                sel_claude=1; sel_cursor=1; sel_codex=1; sel_opencode=1; sel_gemini=1; sel_antigravity=1; sel_copilot=1
                 ;;
             'n'|'N')  # Select none
-                sel_claude=0; sel_cursor=0; sel_codex=0; sel_gemini=0; sel_antigravity=0; sel_copilot=0
+                sel_claude=0; sel_cursor=0; sel_codex=0; sel_opencode=0; sel_gemini=0; sel_antigravity=0; sel_copilot=0
                 ;;
             'q'|'Q')  # Quit
                 tput cnorm 2>/dev/null || true
@@ -648,6 +660,7 @@ show_multiselect_menu() {
     [ $sel_claude -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS claude"
     [ $sel_cursor -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS cursor"
     [ $sel_codex -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS codex"
+    [ $sel_opencode -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS opencode"
     [ $sel_gemini -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS gemini"
     [ $sel_antigravity -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS antigravity"
     [ $sel_copilot -eq 1 ] && SELECTED_AGENTS="$SELECTED_AGENTS copilot"
@@ -1082,24 +1095,26 @@ main() {
                 echo "  1) Claude Code  (~/.claude/skills)"
                 echo "  2) Cursor       (~/.claude/skills)"
                 echo "  3) Codex CLI    (~/.codex/skills)"
-                echo "  4) Gemini CLI   (~/.gemini/skills)"
-                echo "  5) Antigravity  (~/.gemini/antigravity/global_skills)"
-                echo "  6) Copilot      (~/.claude/skills)"
+                echo "  4) OpenCode     (~/.config/opencode/skills)"
+                echo "  5) Gemini CLI   (~/.gemini/skills)"
+                echo "  6) Antigravity  (~/.gemini/antigravity/global_skills)"
+                echo "  7) Copilot      (~/.claude/skills)"
                 echo ""
                 echo -n "번호를 공백으로 구분하여 입력하세요 (예: '1 3 4') 또는 'all': "
                 read -r selection </dev/tty
 
                 if [ "$selection" = "all" ]; then
-                    SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
+                    SELECTED_AGENTS="claude cursor codex opencode gemini antigravity copilot"
                 else
                     for num in $selection; do
                         case $num in
                             1) SELECTED_AGENTS="$SELECTED_AGENTS claude" ;;
                             2) SELECTED_AGENTS="$SELECTED_AGENTS cursor" ;;
                             3) SELECTED_AGENTS="$SELECTED_AGENTS codex" ;;
-                            4) SELECTED_AGENTS="$SELECTED_AGENTS gemini" ;;
-                            5) SELECTED_AGENTS="$SELECTED_AGENTS antigravity" ;;
-                            6) SELECTED_AGENTS="$SELECTED_AGENTS copilot" ;;
+                            4) SELECTED_AGENTS="$SELECTED_AGENTS opencode" ;;
+                            5) SELECTED_AGENTS="$SELECTED_AGENTS gemini" ;;
+                            6) SELECTED_AGENTS="$SELECTED_AGENTS antigravity" ;;
+                            7) SELECTED_AGENTS="$SELECTED_AGENTS copilot" ;;
                         esac
                     done
                 fi
@@ -1111,17 +1126,17 @@ main() {
             else
                 # No TTY at all, default to all agents
                 info "대화형 터미널을 사용할 수 없어 모든 에이전트에 설치합니다"
-                SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
+                SELECTED_AGENTS="claude cursor codex opencode gemini antigravity copilot"
             fi
         fi
     fi
 
     # Default to all if still no agents selected
     if [ -z "$SELECTED_AGENTS" ]; then
-        SELECTED_AGENTS="claude cursor codex gemini antigravity copilot"
+        SELECTED_AGENTS="claude cursor codex opencode gemini antigravity copilot"
     fi
 
-    # Remove duplicates (claude and cursor share the same path)
+    # Remove duplicates for agents that share the same install path
     local unique_paths=""
     local final_agents=""
     for agent in $SELECTED_AGENTS; do

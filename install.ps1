@@ -15,6 +15,9 @@
 .PARAMETER Codex
     Codex CLI에 설치 (~/.codex/skills)
 
+.PARAMETER Opencode
+    OpenCode에 설치 (~/.config/opencode/skills)
+
 .PARAMETER Gemini
     Gemini CLI에 설치 (~/.gemini/skills)
 
@@ -52,6 +55,7 @@ param(
     [switch]$Claude,
     [switch]$Cursor,
     [switch]$Codex,
+    [switch]$Opencode,
     [switch]$Gemini,
     [switch]$Antigravity,
     [switch]$Copilot,
@@ -186,6 +190,10 @@ $AgentConfig = @{
         Name = "Codex CLI"
         Path = Join-Path $UserHomePath ".codex\skills"
     }
+    "opencode" = @{
+        Name = "OpenCode"
+        Path = Join-Path $UserHomePath ".config\opencode\skills"
+    }
     "gemini" = @{
         Name = "Gemini CLI"
         Path = Join-Path $UserHomePath ".gemini\skills"
@@ -200,7 +208,7 @@ $AgentConfig = @{
     }
 }
 
-$AgentOrder = @("claude", "cursor", "codex", "gemini", "antigravity", "copilot")
+$AgentOrder = @("claude", "cursor", "codex", "opencode", "gemini", "antigravity", "copilot")
 
 # ============================================================================
 # Logging functions
@@ -240,7 +248,7 @@ Windows용 NDS 스킬 설치기
     irm <url>/install.ps1 | iex
 
 환경변수:
-    NDS_AGENTS         쉼표로 구분된 에이전트: claude,cursor,codex,gemini,antigravity,copilot (또는 "all")
+    NDS_AGENTS         쉼표로 구분된 에이전트: claude,cursor,codex,opencode,gemini,antigravity,copilot (또는 "all")
     NDS_SKILLS         설치할 스킬 목록 (쉼표로 구분)
     NDS_NO_INTERACTIVE "true"로 설정하면 TUI 선택을 건너뜀
     NDS_GITLAB_HOST    GitLab 호스트 (기본값: gitlab.gabia.com)
@@ -251,6 +259,7 @@ Windows용 NDS 스킬 설치기
     Claude Code   ~/.claude/skills
     Cursor        ~/.claude/skills
     Codex CLI     ~/.codex/skills
+    OpenCode      ~/.config/opencode/skills
     Gemini CLI    ~/.gemini/skills
     Antigravity   ~/.gemini/antigravity/global_skills
     Copilot       ~/.claude/skills
@@ -300,6 +309,7 @@ if ($env:NDS_AGENTS) {
 if ($Claude) { $SelectedAgents += "claude" }
 if ($Cursor) { $SelectedAgents += "cursor" }
 if ($Codex) { $SelectedAgents += "codex" }
+if ($Opencode) { $SelectedAgents += "opencode" }
 if ($Gemini) { $SelectedAgents += "gemini" }
 if ($Antigravity) { $SelectedAgents += "antigravity" }
 if ($Copilot) { $SelectedAgents += "copilot" }
