@@ -587,9 +587,10 @@ show_multiselect_menu() {
 
         case "$key" in
             $'\x1b')  # Escape sequence
-                local key2
-                read -rsn2 -t 0.1 key2 || true
-                case "$key2" in
+                local key2 key3
+                read -rsn1 -t 1 key2 || true
+                read -rsn1 -t 1 key3 || true
+                case "${key2}${key3}" in
                     '[A')  # Up arrow
                         cursor=$((cursor - 1))
                         [ $cursor -lt 0 ] && cursor=$((num_options - 1))
