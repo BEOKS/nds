@@ -1,0 +1,4 @@
+interface:
+  display_name: "GSAP GIF Creator"
+  short_description: "GSAP 기반 애니메이션 GIF 생성과 최적화 가이드"
+  default_prompt: "Use $gsap-gif-creator to turn a GSAP animation into a short looping GIF."

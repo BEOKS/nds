@@ -5,6 +5,7 @@ canvas-design
 code-simplifier
 composition-patterns
 cve-scan
+development-plan-writer
 doc-coauthoring
 docx
 frontend-design
@@ -19,8 +20,18 @@ gabia-dev-mcp-memory
 gabia-dev-mcp-mysql
 gabia-dev-mcp-oracle
 gabia-dev-mcp-sentry
+gabia-request
 git-worktree
 gitlab-review
+gsap-core
+gsap-frameworks
+gsap-gif-creator
+gsap-performance
+gsap-plugins
+gsap-react
+gsap-scrolltrigger
+gsap-timeline
+gsap-utils
 hiworks-mail
 hiworks-memo
 hiworks-ui
