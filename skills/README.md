@@ -54,11 +54,6 @@ NDS 프로젝트의 Claude Code 스킬 모음입니다.
 | | `MYSQL_PASSWORD` | MySQL 비밀번호 (단일 계정 시 **필수**) |
 | | `MYSQL_PORT` | MySQL 포트 (기본값: `3306`) |
 | | `MYSQL_DATABASE` | 기본 DB/스키마 (단일 계정 시) |
-| **Hiworks 쪽지** | `HIWORKS_ID` | 사용자 ID (**필수**, 이메일의 @ 앞부분) |
-| | `HIWORKS_DOMAIN` | 도메인 (**필수**, 예: `company.com`) |
-| | `HIWORKS_PWD` | 비밀번호 (**필수**) |
-| | `HIWORKS_OTP_SECRET` | OTP 시크릿 (선택, TOTP 기반) |
-| | `HIWORKS_ENV` | 환경 선택 (기본값: `prod`) |
 
 ### 인증 방식별 설정 가이드
 
@@ -175,16 +170,22 @@ export MYSQL_PORT="3306"
 export MYSQL_DATABASE="your-db"
 ```
 
-#### Hiworks 쪽지
+#### Hiworks CLI
 
 ```bash
-export HIWORKS_ID="your-id"
-export HIWORKS_DOMAIN="company.com"
-export HIWORKS_PWD="your-password"
+# OAuth 로그인
+hiworks auth browser-login
 
-# 선택: OTP가 필요한 계정
-export HIWORKS_OTP_SECRET="your-otp-secret"
-export HIWORKS_ENV="prod"           # prod / dev / stage
+# 현재 사용자/세션 상태 확인
+hiworks whoami
+hiworks auth status
+hiworks doctor
+
+# 필요 시 프로필 지정
+hiworks --profile gabia auth browser-login
+
+# 스킬 동기화
+hiworks skills sync --target codex --dest ~/.codex/skills
 ```
 
 ## 스킬 목록
@@ -203,7 +204,8 @@ export HIWORKS_ENV="prod"           # prod / dev / stage
 | `gabia-dev-mcp-mysql` | MySQL 연결 테스트 및 읽기 전용 쿼리 실행 | O |
 | `gabia-dev-mcp-oracle` | Oracle DB 연결 테스트 및 SELECT 쿼리 실행 | O |
 | `gabia-dev-mcp-sentry` | Sentry 이슈 검색/조회, 이벤트/스택트레이스 조회, 상태 변경 | O |
-| `hiworks-memo` | Hiworks 쪽지 목록/상세 조회, 읽지 않은 쪽지 수 확인 | O |
+| `hiworks` | Hiworks CLI 전체 기능 가이드. OAuth, 메일, 쪽지, 일정, 예약, 업무, 게시판, 드라이브, 전자결재, 관리자 기능 포함 | - |
+| `hiworks-ui` | Hiworks UI 컴포넌트 및 아이콘 라이브러리 사용 가이드 | - |
 | `board-resolver` | Mattermost Boards 이슈 분석 및 해결방안 제시 | O (간접) |
 
 ### 개발 도구

@@ -525,9 +525,8 @@ function Get-SkillsList {
         "gsap-utils"
         "git-worktree"
         "gitlab-review"
-        "hiworks-mail"
+        "hiworks"
         "hiworks-ui"
-        "hiworks-memo"
         "internal-comms"
         "mac-cron"
         "mcp-builder"
@@ -1135,22 +1134,6 @@ function Configure-EnvironmentVariables {
     if ($script:EnvVarsAdded.ContainsKey("LDAP_USER")) {
         $null = Prompt-EnvVar -VarName "LDAP_PWD" `
             -Description "LDAP 비밀번호" `
-            -IsOptional $true
-    }
-
-    # Hiworks 쪽지
-    Write-Host ""
-    Write-Host "[Hiworks 쪽지]" -ForegroundColor White
-    $null = Prompt-EnvVar -VarName "HIWORKS_ID" `
-        -Description "Hiworks 사용자 ID (이메일의 @ 앞부분)" `
-        -IsOptional $true
-
-    if ($script:EnvVarsAdded.ContainsKey("HIWORKS_ID")) {
-        $null = Prompt-EnvVar -VarName "HIWORKS_DOMAIN" `
-            -Description "Hiworks 도메인 (예: company.com)" `
-            -IsOptional $true
-        $null = Prompt-EnvVar -VarName "HIWORKS_PWD" `
-            -Description "Hiworks 비밀번호" `
             -IsOptional $true
     }
 

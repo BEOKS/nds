@@ -32,8 +32,7 @@ gsap-react
 gsap-scrolltrigger
 gsap-timeline
 gsap-utils
-hiworks-mail
-hiworks-memo
+hiworks
 hiworks-ui
 internal-comms
 mac-cron
