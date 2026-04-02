@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Admin"
+  short_description: "Hiworks 관리자 데이터 추출과 보고서 가이드"
+  default_prompt: "$hiworks-admin을 사용해 관리자 권한이 필요한 다운로드와 보고서 흐름을 진행해줘."

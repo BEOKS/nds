@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Booking"
+  short_description: "Hiworks 회의실과 자원 예약 조회, 생성 가이드"
+  default_prompt: "$hiworks-booking을 사용해 자원을 찾고 예약 가능 여부를 확인한 뒤 예약 흐름을 진행해줘."

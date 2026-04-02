@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Team"
+  short_description: "Hiworks 팀 리포트와 자가점검 배치 가이드"
+  default_prompt: "$hiworks-team을 사용해 팀 리포트나 자가점검 일괄 업데이트 흐름을 진행해줘."

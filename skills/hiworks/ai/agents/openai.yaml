@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks AI"
+  short_description: "Hiworks AI 앱, 세션, 채팅 흐름 가이드"
+  default_prompt: "$hiworks-ai를 사용해 앱을 고르고 세션 생성이나 채팅 흐름을 진행해줘."

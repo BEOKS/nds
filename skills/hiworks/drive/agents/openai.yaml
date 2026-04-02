@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Drive"
+  short_description: "Hiworks 드라이브 조회, 공유, 복사 작업 가이드"
+  default_prompt: "$hiworks-drive를 사용해 파일이나 폴더를 찾고 공유나 복사 작업을 진행해줘."

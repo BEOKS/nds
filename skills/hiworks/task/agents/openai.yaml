@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Task"
+  short_description: "Hiworks 업무 앱, 태스크, 댓글 작업 가이드"
+  default_prompt: "$hiworks-task를 사용해 업무 앱 구조를 확인하고 태스크 작업 흐름을 진행해줘."

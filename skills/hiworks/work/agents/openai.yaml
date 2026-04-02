@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Work"
+  short_description: "Hiworks 휴가 현황, 잔여량, 신청 흐름 가이드"
+  default_prompt: "$hiworks-work를 사용해 휴가 현황을 확인하고 신청 전 검증까지 진행해줘."

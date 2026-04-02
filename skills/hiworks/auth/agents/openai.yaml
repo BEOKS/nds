@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Auth"
+  short_description: "Hiworks OAuth 로그인과 토큰 상태 점검 가이드"
+  default_prompt: "$hiworks-auth를 사용해 Hiworks 인증 상태를 점검하고 필요한 로그인이나 refresh를 진행해줘."

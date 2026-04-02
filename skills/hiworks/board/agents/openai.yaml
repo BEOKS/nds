@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Board"
+  short_description: "Hiworks 게시판 조회, 댓글, 작성 흐름 가이드"
+  default_prompt: "$hiworks-board를 사용해 최근 글을 찾고 필요한 게시판 작업을 진행해줘."

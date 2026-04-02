@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hiworks Approval"
+  short_description: "Hiworks 전자결재 양식, 결재선, 기안 가이드"
+  default_prompt: "$hiworks-approval을 사용해 양식과 결재선을 확인하고 기안 초안을 준비해줘."

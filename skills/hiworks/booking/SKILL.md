@@ -18,7 +18,8 @@ description: Hiworks 회의실/자원 검색, 예약 현황 조회, 예약 생�
 hiworks booking categories
 hiworks booking categories --with-resources --is-use
 hiworks booking search-resources --name-like 회의실
-hiworks booking available --date 2026-04-02 --duration 60
+hiworks booking available --category-id 197 --date 2026-04-02 --duration-minutes 60
+hiworks booking category-bookings --category-id 197 --start-time 2026-04-02T15:00:00 --end-time 2026-04-02T15:59:59
 hiworks booking my
 hiworks booking reserve --resource-name 603S --start 2026-04-02T10:00:00 --end 2026-04-02T11:00:00 --reason 팀미팅 --dry-run
 hiworks booking reserve --resource-name 603S --start 2026-04-02T10:00:00 --end 2026-04-02T11:00:00 --reason 팀미팅 --yes
@@ -31,6 +32,8 @@ hiworks booking cancel --booking-id <booking_id> --dry-run
 ```bash
 hiworks booking categories --with-resources --is-use
 hiworks booking search-resources --name-like 603S
+hiworks booking available --category-id 197 --date 2026-04-02 --duration-minutes 60
+hiworks booking category-bookings --category-id 197 --start-time 2026-04-02T15:00:00 --end-time 2026-04-02T15:59:59
 hiworks booking reserve --resource-name 603S --start 2026-04-02T10:00:00 --end 2026-04-02T11:00:00 --reason 팀미팅 --dry-run
 hiworks booking reserve --resource-name 603S --start 2026-04-02T10:00:00 --end 2026-04-02T11:00:00 --reason 팀미팅 --yes
 ```
@@ -38,6 +41,8 @@ hiworks booking reserve --resource-name 603S --start 2026-04-02T10:00:00 --end 2
 ## Rules
 
 - 자원명만 아는 경우 `search-resources` 또는 `categories --with-resources`를 먼저 사용합니다.
+- `available`은 반드시 `--category-id`, `--date`, `--duration-minutes`를 함께 넣어 호출합니다.
+- `available` API가 404를 반환하면 `category-bookings`로 해당 시간대 예약된 회의실을 조회한 뒤, 전체 회의실 목록에서 제외하는 방식으로 빈 회의실을 판단합니다.
 - 예약 생성, 반납, 취소는 먼저 `--dry-run`으로 확인합니다.
 - 실제 변경은 `--yes`가 있을 때만 진행합니다.
 - 이미 확정된 내 예약을 기준으로 취소/반납 대상을 고르려면 `booking my`를 먼저 확인합니다.
