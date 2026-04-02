@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks Org"
-  short_description: "Hiworks 조직 트리와 node_id 확인 가이드"
-  default_prompt: "$hiworks-org를 사용해 조직 트리를 보고 필요한 node_id를 찾아줘."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks Mail"
-  short_description: "Hiworks 메일 조회, 잠금 해제, 발송 준비 가이드"
-  default_prompt: "$hiworks-mail를 사용해 메일함 상태를 확인하고 발송 전 preflight까지 진행해줘."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks Schedule"
-  short_description: "Hiworks 캘린더와 기간별 일정 조회 가이드"
-  default_prompt: "$hiworks-schedule을 사용해 캘린더와 기간별 일정을 조회해줘."

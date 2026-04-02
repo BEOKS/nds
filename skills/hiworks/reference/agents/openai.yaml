@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks Reference"
-  short_description: "Hiworks API, flow, spec, ID 탐색 가이드"
-  default_prompt: "$hiworks-reference를 사용해 필요한 Hiworks 기능, spec, 식별자를 찾아줘."

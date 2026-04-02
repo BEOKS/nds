@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks Memo"
-  short_description: "Hiworks 쪽지 조회와 이름 기반 전송 가이드"
-  default_prompt: "$hiworks-memo를 사용해 수신자를 찾고 쪽지 조회나 전송 흐름을 진행해줘."

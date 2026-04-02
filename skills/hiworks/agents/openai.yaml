@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hiworks"
-  short_description: "Hiworks CLI 전체 흐름과 하위 도메인 스킬 가이드"
-  default_prompt: "$hiworks를 사용해 적절한 Hiworks CLI 흐름을 고르고 다음 명령을 실행해줘."
