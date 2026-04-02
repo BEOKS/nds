@@ -67,6 +67,8 @@ def _http_json(method: str, url: str, *, params: dict | None = None, body: dict 
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             raw = resp.read()
+            if not raw:
+                return {"status": "ok", "code": resp.status}
             return json.loads(raw.decode("utf-8"))
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
