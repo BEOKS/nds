@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920" />
+  <title>통계 모듈 리팩토링 — Cinematic Reveal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #0a0a0f;
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+    }
+
+    /* ── Stage ── */
+    #stage {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    /* Ambient gradient background */
+    #bg-glow {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 800px 600px at 25% 50%, rgba(220,38,38,.08) 0%, transparent 70%),
+        radial-gradient(ellipse 800px 600px at 75% 50%, rgba(34,197,94,.08) 0%, transparent 70%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ── Title ── */
+    #title-block {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      opacity: 0;
+    }
+    #title-block .eyebrow {
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.4);
+      margin-bottom: 20px;
+    }
+    #title-block h1 {
+      font-size: 96px;
+      font-weight: 900;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,.6) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #title-block .subtitle {
+      margin-top: 16px;
+      font-size: 22px;
+      font-weight: 300;
+      color: rgba(255,255,255,.35);
+      letter-spacing: 2px;
+    }
+
+    /* ── Image panels ── */
+    .panel-wrap {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 760px;
+      opacity: 0;
+    }
+    #before-wrap {
+      left: 80px;
+    }
+    #after-wrap {
+      right: 80px;
+    }
+
+    .panel-inner {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 40px 120px rgba(0,0,0,.8);
+    }
+
+    .panel-inner img {
+      width: 100%;
+      height: 480px;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Color tint overlays */
+    .tint {
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      opacity: 0;
+      mix-blend-mode: multiply;
+    }
+    #before-tint { background: #ff2222; }
+    #after-tint  { background: #00ff66; }
+
+    /* Frame glow borders */
+    #before-wrap .panel-inner {
+      border: 1.5px solid rgba(239,68,68,.6);
+      box-shadow: 0 0 60px rgba(239,68,68,.25), 0 40px 120px rgba(0,0,0,.8);
+    }
+    #after-wrap .panel-inner {
+      border: 1.5px solid rgba(34,197,94,.6);
+      box-shadow: 0 0 60px rgba(34,197,94,.25), 0 40px 120px rgba(0,0,0,.8);
+    }
+
+    /* Panel labels */
+    .panel-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      opacity: 0;
+    }
+    #before-label {
+      background: rgba(239,68,68,.15);
+      border: 1px solid rgba(239,68,68,.4);
+      color: #f87171;
+    }
+    #after-label {
+      background: rgba(34,197,94,.15);
+      border: 1px solid rgba(34,197,94,.4);
+      color: #4ade80;
+    }
+    .label-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    #before-label .label-dot { background: #ef4444; }
+    #after-label  .label-dot { background: #22c55e; }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      opacity: 0;
+    }
+    .stat-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 4px;
+    }
+    #before-stats .stat-chip {
+      background: rgba(239,68,68,.12);
+      border: 1px solid rgba(239,68,68,.3);
+      color: #fca5a5;
+    }
+    #after-stats .stat-chip {
+      background: rgba(34,197,94,.12);
+      border: 1px solid rgba(34,197,94,.3);
+      color: #86efac;
+    }
+
+    /* ── Crack shatter overlay ── */
+    #crack-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 10;
+    }
+    #crack-overlay svg {
+      width: 100%; height: 100%;
+    }
+
+    /* ── Arrow between panels (side-by-side phase) ── */
+    #arrow-block {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+    }
+    #arrow-block .arrow-line {
+      width: 2px;
+      height: 60px;
+      background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+      border-radius: 2px;
+    }
+    #arrow-block .arrow-head {
+      width: 0; height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 14px solid #8b5cf6;
+    }
+    #arrow-block .arrow-label {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(139,92,246,.8);
+      font-weight: 700;
+    }
+
+    /* ── Bottom counter strip ── */
+    #counter-strip {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    #counter-strip .headline {
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+    #counter-strip .before-time {
+      color: #f87171;
+    }
+    #counter-strip .arrow-text {
+      color: rgba(255,255,255,.3);
+      margin: 0 24px;
+    }
+    #counter-strip .after-time {
+      color: #4ade80;
+    }
+    #counter-strip .sub {
+      margin-top: 10px;
+      font-size: 16px;
+      font-weight: 400;
+      color: rgba(255,255,255,.35);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    /* counter number that animates */
+    #minute-counter {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Replay button ── */
+    #replay-btn {
+      position: absolute;
+      bottom: 40px;
+      right: 60px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 28px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: background .2s, color .2s, border-color .2s;
+    }
+    #replay-btn:hover {
+      background: rgba(255,255,255,.12);
+      border-color: rgba(255,255,255,.3);
+      color: #fff;
+    }
+    #replay-btn svg { flex-shrink: 0; }
+
+    /* ── Scanline texture (cinematic) ── */
+    #scanlines {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,.03) 3px,
+        rgba(0,0,0,.03) 4px
+      );
+      z-index: 20;
+    }
+
+    /* ── Vignette ── */
+    #vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse 120% 100% at 50% 50%, transparent 50%, rgba(0,0,0,.65) 100%);
+      z-index: 19;
+    }
+
+    /* ── Global fade-out cover ── */
+    #fade-cover {
+      position: absolute;
+      inset: 0;
+      background: #0a0a0f;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 30;
+    }
+  </style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- Ambient glow -->
+  <div id="bg-glow"></div>
+
+  <!-- Title -->
+  <div id="title-block">
+    <div class="eyebrow">Code Refactoring</div>
+    <h1>통계 모듈 리팩토링</h1>
+    <div class="subtitle">NDS · Statistics Module · 2026</div>
+  </div>
+
+  <!-- Before panel -->
+  <div class="panel-wrap" id="before-wrap">
+    <div id="before-label" class="panel-label">
+      <span class="label-dot"></span>Before
+    </div>
+    <div class="panel-inner">
+      <img src="../../images/before.png" alt="Before" />
+      <div class="tint" id="before-tint"></div>
+    </div>
+    <div class="stats-row" id="before-stats">
+      <span class="stat-chip">단일 파일</span>
+      <span class="stat-chip">1,200줄</span>
+      <span class="stat-chip">타입 없음</span>
+    </div>
+  </div>
+
+  <!-- After panel -->
+  <div class="panel-wrap" id="after-wrap">
+    <div id="after-label" class="panel-label">
+      <span class="label-dot"></span>After
+    </div>
+    <div class="panel-inner">
+      <img src="../../images/after.png" alt="After" />
+      <div class="tint" id="after-tint"></div>
+    </div>
+    <div class="stats-row" id="after-stats">
+      <span class="stat-chip">7개 모듈</span>
+      <span class="stat-chip">Typed API</span>
+      <span class="stat-chip">4종 통계</span>
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div id="arrow-block">
+    <div class="arrow-label">Refactored</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head"></div>
+  </div>
+
+  <!-- Bottom counter -->
+  <div id="counter-strip">
+    <div class="headline">
+      <span class="before-time">수동 ~3일</span>
+      <span class="arrow-text">→</span>
+      <span class="after-time">자동 <span id="minute-counter">0</span>분</span>
+    </div>
+    <div class="sub">개발 시간 단축 · Automated in minutes</div>
+  </div>
+
+  <!-- Crack overlay (SVG) -->
+  <div id="crack-overlay">
+    <svg viewBox="0 0 760 480" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <g id="crack-lines" fill="none" stroke="rgba(239,68,68,0.9)" stroke-width="1.5">
+        <path d="M380,240 L290,160 L310,80 M380,240 L260,300 L200,420 M380,240 L470,180 L500,60
+                 M380,240 L490,310 L560,430 M380,240 L380,100 M380,240 L220,200 M380,240 L540,250
+                 M290,160 L220,120 M260,300 L180,320 M470,180 L530,140 M490,310 L580,340
+                 M380,100 L340,40 M380,100 L420,30" />
+      </g>
+      <!-- Shatter shards (semi-transparent fill) -->
+      <g id="crack-shards" fill="rgba(239,68,68,0.07)" stroke="rgba(239,68,68,0.4)" stroke-width="1">
+        <polygon points="380,240 290,160 260,300" />
+        <polygon points="380,240 290,160 380,100 470,180" />
+        <polygon points="380,240 470,180 490,310" />
+        <polygon points="380,240 260,300 200,420 490,310" />
+        <polygon points="380,100 310,80 290,160" />
+        <polygon points="380,100 470,180 500,60" />
+      </g>
+    </svg>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn" type="button">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="1 4 1 10 7 10"></polyline>
+      <path d="M3.51 15a9 9 0 1 0 .49-4"></path>
+    </svg>
+    Replay
+  </button>
+
+  <!-- FX layers -->
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="fade-cover"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── Elements ──────────────────────────────────────────────────
+  const titleBlock  = document.getElementById('title-block');
+  const bgGlow      = document.getElementById('bg-glow');
+  const beforeWrap  = document.getElementById('before-wrap');
+  const afterWrap   = document.getElementById('after-wrap');
+  const beforeLabel = document.getElementById('before-label');
+  const afterLabel  = document.getElementById('after-label');
+  const beforeStats = document.getElementById('before-stats');
+  const afterStats  = document.getElementById('after-stats');
+  const beforeTint  = document.getElementById('before-tint');
+  const afterTint   = document.getElementById('after-tint');
+  const crackOverlay = document.getElementById('crack-overlay');
+  const crackLines  = document.getElementById('crack-lines');
+  const crackShards = document.getElementById('crack-shards');
+  const arrowBlock  = document.getElementById('arrow-block');
+  const counterStrip = document.getElementById('counter-strip');
+  const minuteCounter = document.getElementById('minute-counter');
+  const fadeCover   = document.getElementById('fade-cover');
+  const replayBtn   = document.getElementById('replay-btn');
+
+  // ── Initial states ────────────────────────────────────────────
+  function resetState() {
+    gsap.set([titleBlock, bgGlow, beforeWrap, afterWrap, beforeLabel, afterLabel,
+              beforeStats, afterStats, crackOverlay, arrowBlock, counterStrip, replayBtn],
+      { opacity: 0 });
+    gsap.set(fadeCover, { opacity: 0 });
+    gsap.set(beforeTint, { opacity: 0 });
+    gsap.set(afterTint, { opacity: 0 });
+    gsap.set(crackLines, { opacity: 0 });
+    gsap.set(crackShards, { opacity: 0 });
+    gsap.set(replayBtn, { pointerEvents: 'none' });
+
+    // Panel positions (off-screen)
+    gsap.set(beforeWrap, { x: -1000, opacity: 0, scale: 1 });
+    gsap.set(afterWrap,  { x: 1000,  opacity: 0, scale: 1 });
+
+    // Side-by-side target positions (set via CSS left/right, so no transform needed at start)
+    minuteCounter.textContent = '0';
+  }
+
+  // ── Counter animation helper ──────────────────────────────────
+  function animateCounter(target, duration, onUpdate) {
+    const obj = { val: 0 };
+    gsap.to(obj, {
+      val: target,
+      duration,
+      ease: 'power2.out',
+      onUpdate: () => { onUpdate(Math.round(obj.val)); }
+    });
+  }
+
+  // ── Main timeline ─────────────────────────────────────────────
+  function buildTimeline() {
+    const tl = gsap.timeline({
+      defaults: { ease: 'power3.out' },
+      onComplete: showReplay
+    });
+
+    // ── 0–2s  Title fade in ──────────────────────────────────────
+    tl.addLabel('title', 0);
+    tl.to(titleBlock, { opacity: 1, duration: 1.2, ease: 'power2.inOut' }, 'title');
+    // Hold title
+    tl.to(titleBlock, { opacity: 0, duration: 0.6, ease: 'power2.in' }, 'title+=1.6');
+
+    // ── 2–5s  Before image slides in from left ────────────────────
+    tl.addLabel('before', 2.0);
+    tl.to(bgGlow, { opacity: 1, duration: 1.5, ease: 'power1.inOut' }, 'before');
+    tl.to(beforeWrap, { x: 0, opacity: 1, duration: 0.9, ease: 'power3.out' }, 'before');
+    tl.to(beforeLabel, { opacity: 1, duration: 0.4 }, 'before+=0.5');
+    tl.to(beforeTint, { opacity: 0.18, duration: 0.6 }, 'before+=0.5');
+    tl.to(beforeStats, { opacity: 1, duration: 0.5 }, 'before+=0.8');
+
+    // ── 5–6s  Dramatic pause + crack ─────────────────────────────
+    tl.addLabel('crack', 5.0);
+    tl.to(crackOverlay, { opacity: 1, duration: 0.1 }, 'crack');
+    tl.to(crackLines,   { opacity: 1, duration: 0.15, ease: 'power4.out' }, 'crack+=0.05');
+    tl.to(crackShards,  { opacity: 1, duration: 0.2 }, 'crack+=0.1');
+    // Shake the before panel
+    tl.to(beforeWrap, {
+      keyframes: [
+        { x: -8,  duration: 0.05 },
+        { x:  8,  duration: 0.05 },
+        { x: -5,  duration: 0.05 },
+        { x:  5,  duration: 0.05 },
+        { x:  0,  duration: 0.05 }
+      ]
+    }, 'crack+=0.1');
+    // Before panel slides away to left with scale
+    tl.to(beforeWrap, {
+      x: -1100, opacity: 0, duration: 0.55, ease: 'power3.in'
+    }, 'crack+=0.55');
+    tl.to(crackOverlay, { opacity: 0, duration: 0.25 }, 'crack+=0.6');
+
+    // ── 6–9s  After image reveals from right ──────────────────────
+    tl.addLabel('after', 6.0);
+    tl.to(afterWrap, { x: 0, opacity: 1, duration: 0.9, ease: 'power3.out' }, 'after+=0.15');
+    tl.to(afterLabel, { opacity: 1, duration: 0.4 }, 'after+=0.7');
+    tl.to(afterTint,  { opacity: 0.14, duration: 0.6 }, 'after+=0.7');
+    tl.to(afterStats, { opacity: 1, duration: 0.5 }, 'after+=1.0');
+
+    // ── 9–11s  Side-by-side comparison ───────────────────────────
+    tl.addLabel('sidebyside', 9.0);
+    // Bring before panel back in
+    tl.to(beforeWrap, {
+      x: 0, opacity: 1, duration: 0.6, ease: 'back.out(1.2)'
+    }, 'sidebyside');
+    tl.to(beforeLabel, { opacity: 1, duration: 0.3 }, 'sidebyside+=0.3');
+    tl.to(beforeStats, { opacity: 1, duration: 0.3 }, 'sidebyside+=0.4');
+
+    // Scale both panels down to fit side-by-side
+    tl.to([beforeWrap, afterWrap], {
+      scale: 0.78,
+      duration: 0.7,
+      ease: 'power2.inOut'
+    }, 'sidebyside+=0.1');
+
+    // Arrow appears
+    tl.to(arrowBlock, { opacity: 1, duration: 0.4 }, 'sidebyside+=0.6');
+
+    // ── 11–13s  Counter animation ─────────────────────────────────
+    tl.addLabel('counter', 11.0);
+    tl.to(counterStrip, { opacity: 1, duration: 0.5 }, 'counter');
+    tl.add(() => {
+      animateCounter(50, 1.8, (v) => { minuteCounter.textContent = v; });
+    }, 'counter+=0.3');
+
+    // ── 13–15s  Fade out ─────────────────────────────────────────
+    tl.addLabel('fadeout', 13.0);
+    tl.to(fadeCover, { opacity: 1, duration: 2.0, ease: 'power2.inOut' }, 'fadeout');
+
+    return tl;
+  }
+
+  function showReplay() {
+    gsap.to(replayBtn, {
+      opacity: 1, duration: 0.5, ease: 'power2.out',
+      onComplete: () => { replayBtn.style.pointerEvents = 'auto'; }
+    });
+  }
+
+  // ── Replay ────────────────────────────────────────────────────
+  replayBtn.addEventListener('click', () => {
+    replayBtn.style.pointerEvents = 'none';
+    gsap.to(replayBtn, { opacity: 0, duration: 0.3 });
+    resetState();
+    buildTimeline();
+  });
+
+  // ── Kick off ──────────────────────────────────────────────────
+  resetState();
+  buildTimeline();
+})();
+</script>
+</body>
+</html>
