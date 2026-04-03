@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920" />
+  <title>통계 모듈 리팩토링 — Before / After</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #0a0a0f;
+      font-family: 'Inter', sans-serif;
+      color: #e2e8f0;
+      user-select: none;
+    }
+
+    .page {
+      width: 1920px;
+      height: 1080px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    /* Ambient glow effects */
+    .page::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 400px;
+      background: radial-gradient(ellipse, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Title */
+    .title {
+      font-family: 'Inter', sans-serif;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: #f1f5f9;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .title span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 400;
+      color: #94a3b8;
+    }
+
+    /* Labels row */
+    .labels-row {
+      display: flex;
+      width: 1360px;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 18px;
+      border-radius: 4px;
+    }
+
+    .label-before {
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .label-after {
+      color: #86efac;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    /* Comparison container */
+    .compare-wrapper {
+      position: relative;
+      width: 1360px;
+      height: 765px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 32px 80px rgba(0, 0, 0, 0.6),
+        0 8px 24px rgba(0, 0, 0, 0.4);
+      cursor: ew-resize;
+      z-index: 2;
+    }
+
+    /* After image (full width, underneath) */
+    .img-after {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: left top;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Before image (clipped on the left) */
+    .img-before-wrapper {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      /* width controlled via JS */
+    }
+
+    .img-before {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1360px; /* keep natural width so clipping reveals correct portion */
+      height: 765px;
+      object-fit: cover;
+      object-position: left top;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Color tint overlays */
+    .tint-before {
+      position: absolute;
+      inset: 0;
+      background: rgba(239, 68, 68, 0.07);
+      pointer-events: none;
+      mix-blend-mode: multiply;
+    }
+
+    .tint-after {
+      position: absolute;
+      inset: 0;
+      background: rgba(34, 197, 94, 0.07);
+      pointer-events: none;
+      mix-blend-mode: multiply;
+    }
+
+    /* Divider line */
+    .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.9);
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow:
+        0 0 12px rgba(255, 255, 255, 0.5),
+        0 0 24px rgba(255, 255, 255, 0.2);
+      z-index: 10;
+    }
+
+    /* Drag handle */
+    .handle {
+      position: absolute;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+      background: #ffffff;
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.2),
+        0 4px 20px rgba(0, 0, 0, 0.5),
+        0 0 24px rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 11;
+      pointer-events: none;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .handle svg {
+      width: 20px;
+      height: 20px;
+      color: #0a0a0f;
+      flex-shrink: 0;
+    }
+
+    .compare-wrapper.dragging .handle {
+      box-shadow:
+        0 0 0 5px rgba(255, 255, 255, 0.3),
+        0 4px 28px rgba(0, 0, 0, 0.6),
+        0 0 32px rgba(255, 255, 255, 0.25);
+    }
+
+    /* Hint text */
+    .hint {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: #475569;
+      letter-spacing: 0.02em;
+      position: relative;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <h1 class="title">
+      통계 모듈 리팩토링 &nbsp;<span>—&nbsp; Before / After</span>
+    </h1>
+
+    <div class="labels-row">
+      <span class="label label-before">Before</span>
+      <span class="label label-after">After</span>
+    </div>
+
+    <div class="compare-wrapper" id="compareWrapper">
+      <!-- After (base layer) -->
+      <img class="img-after" src="../../images/after.png" alt="After" draggable="false" />
+      <div class="tint-after"></div>
+
+      <!-- Before (clipped layer) -->
+      <div class="img-before-wrapper" id="beforeWrapper">
+        <img class="img-before" src="../../images/before.png" alt="Before" draggable="false" />
+        <div class="tint-before"></div>
+      </div>
+
+      <!-- Divider + handle -->
+      <div class="divider" id="divider"></div>
+      <div class="handle" id="handle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+          <polyline points="15 18 9 12 15 6" transform="translate(-6,0) scale(-1,1) translate(6,0)" />
+        </svg>
+      </div>
+    </div>
+
+    <p class="hint">드래그하여 비교</p>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      const wrapper   = document.getElementById('compareWrapper');
+      const before    = document.getElementById('beforeWrapper');
+      const divider   = document.getElementById('divider');
+      const handle    = document.getElementById('handle');
+
+      const INITIAL_RATIO = 0.5; // start at 50%
+
+      let ratio = INITIAL_RATIO;
+      let isDragging = false;
+      let animFrameId = null;
+      let pendingRatio = null;
+
+      function applyRatio(r) {
+        const pct = (r * 100).toFixed(4) + '%';
+        before.style.width    = pct;
+        divider.style.left    = pct;
+        handle.style.left     = pct;
+      }
+
+      // Set initial position
+      applyRatio(ratio);
+
+      // Intro animation: slide from center with a short GSAP tween
+      gsap.from({ value: 0.5 }, {
+        duration: 0,  // set instantly (no intro pan — just reveal in place)
+      });
+
+      // Gentle entrance for the whole wrapper
+      gsap.from(wrapper, {
+        autoAlpha: 0,
+        y: 12,
+        duration: 0.7,
+        ease: 'power2.out',
+        delay: 0.15,
+      });
+
+      function getRatioFromEvent(e) {
+        const rect = wrapper.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const raw = (clientX - rect.left) / rect.width;
+        return Math.min(1, Math.max(0, raw));
+      }
+
+      function scheduleUpdate(newRatio) {
+        pendingRatio = newRatio;
+        if (!animFrameId) {
+          animFrameId = requestAnimationFrame(() => {
+            animFrameId = null;
+            if (pendingRatio !== null) {
+              applyRatio(pendingRatio);
+              ratio = pendingRatio;
+              pendingRatio = null;
+            }
+          });
+        }
+      }
+
+      // Mouse
+      wrapper.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        wrapper.classList.add('dragging');
+        scheduleUpdate(getRatioFromEvent(e));
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        scheduleUpdate(getRatioFromEvent(e));
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        wrapper.classList.remove('dragging');
+      });
+
+      // Touch
+      wrapper.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        wrapper.classList.add('dragging');
+        scheduleUpdate(getRatioFromEvent(e));
+      }, { passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        scheduleUpdate(getRatioFromEvent(e));
+      }, { passive: true });
+
+      window.addEventListener('touchend', () => {
+        isDragging = false;
+        wrapper.classList.remove('dragging');
+      });
+
+      // Click anywhere on wrapper (non-drag quick click)
+      wrapper.addEventListener('click', (e) => {
+        const newRatio = getRatioFromEvent(e);
+        gsap.to({ value: ratio }, {
+          value: newRatio,
+          duration: 0.35,
+          ease: 'power2.out',
+          onUpdate: function () {
+            applyRatio(this.targets()[0].value);
+          },
+          onComplete: function () {
+            ratio = newRatio;
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

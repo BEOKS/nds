@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920">
+  <title>통계 모듈 리팩토링 — Before / After</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #0a0a0f;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .scene {
+      width: 1920px;
+      height: 1080px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: #0a0a0f;
+    }
+
+    /* Subtle background grid */
+    .scene::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    .title {
+      font-family: 'Inter', sans-serif;
+      font-size: 36px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.88);
+      letter-spacing: -0.02em;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .title span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 30px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    .comparison-wrapper {
+      position: relative;
+      width: 1440px;
+      height: 810px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.08),
+        0 32px 80px rgba(0,0,0,0.6),
+        0 0 120px rgba(0,0,0,0.4);
+      z-index: 10;
+    }
+
+    .img-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .img-layer img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #0d0d14;
+      display: block;
+    }
+
+    #layer-before {
+      z-index: 2;
+    }
+
+    #layer-after {
+      z-index: 1;
+      opacity: 0;
+    }
+
+    /* Label badge */
+    .label {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      z-index: 20;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 8px 20px;
+      border-radius: 6px;
+      opacity: 0;
+    }
+
+    #label-before {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    #label-after {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+
+    /* Corner accent lines */
+    .corner {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      z-index: 20;
+      opacity: 0.4;
+    }
+    .corner-tl { top: 0; left: 0; border-top: 2px solid rgba(255,255,255,0.5); border-left: 2px solid rgba(255,255,255,0.5); }
+    .corner-tr { top: 0; right: 0; border-top: 2px solid rgba(255,255,255,0.5); border-right: 2px solid rgba(255,255,255,0.5); }
+    .corner-bl { bottom: 0; left: 0; border-bottom: 2px solid rgba(255,255,255,0.5); border-left: 2px solid rgba(255,255,255,0.5); }
+    .corner-br { bottom: 0; right: 0; border-bottom: 2px solid rgba(255,255,255,0.5); border-right: 2px solid rgba(255,255,255,0.5); }
+
+    /* Progress bar */
+    .progress-bar-track {
+      position: absolute;
+      bottom: -28px;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.4));
+    }
+  </style>
+</head>
+<body>
+  <div class="scene">
+    <h1 class="title">통계 모듈 리팩토링 &nbsp;<span>— Before / After</span></h1>
+
+    <div class="comparison-wrapper" id="compare">
+      <!-- Corner accents -->
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+
+      <!-- Labels -->
+      <div class="label" id="label-before">Before</div>
+      <div class="label" id="label-after">After</div>
+
+      <!-- Image layers -->
+      <div class="img-layer" id="layer-before">
+        <img src="../../images/before.png" alt="Before" draggable="false">
+      </div>
+      <div class="img-layer" id="layer-after">
+        <img src="../../images/after.png" alt="After" draggable="false">
+      </div>
+    </div>
+
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    // Each cycle: hold 3s → fade 1s → hold 3s → fade 1s = 8s total
+    const HOLD = 3;
+    const FADE = 1;
+    const CYCLE = (HOLD + FADE) * 2; // 8s
+
+    const tl = gsap.timeline({
+      repeat: -1,
+      defaults: { ease: "power2.inOut" }
+    });
+
+    // --- BEFORE phase ---
+    // Show "Before" label
+    tl.to("#label-before", { opacity: 1, duration: 0.3 }, 0);
+    // Hold Before for 3s (nothing changes)
+    tl.to({}, { duration: HOLD }, 0.3);
+
+    // Fade out Before label as crossfade begins
+    tl.to("#label-before", { opacity: 0, duration: 0.4 }, `+=${0}`);
+
+    // Crossfade: fade out layer-before, fade in layer-after
+    tl.to("#layer-before", { opacity: 0, duration: FADE }, "<");
+    tl.to("#layer-after",  { opacity: 1, duration: FADE }, "<");
+
+    // --- AFTER phase ---
+    // Show "After" label
+    tl.to("#label-after", { opacity: 1, duration: 0.3 }, `>`);
+    // Hold After for 3s
+    tl.to({}, { duration: HOLD }, "<0.3");
+
+    // Fade out After label
+    tl.to("#label-after", { opacity: 0, duration: 0.4 }, `+=${0}`);
+
+    // Crossfade back: fade in layer-before, fade out layer-after
+    tl.to("#layer-before", { opacity: 1, duration: FADE }, "<");
+    tl.to("#layer-after",  { opacity: 0, duration: FADE }, "<");
+
+    // --- Progress bar (separate tween, synced to cycle) ---
+    gsap.to("#progress-fill", {
+      width: "100%",
+      duration: CYCLE,
+      ease: "none",
+      repeat: -1,
+      onRepeat() {
+        gsap.set("#progress-fill", { width: "0%" });
+      }
+    });
+  </script>
+</body>
+</html>

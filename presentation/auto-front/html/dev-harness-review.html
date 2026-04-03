@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dev-harness MR !45 — Code Review</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-deep:      #0d0f14;
+    --bg-panel:     #13161e;
+    --bg-message:   #1a1e2a;
+    --bg-code:      #0a0c12;
+    --border:       #252a38;
+    --border-glow:  #2e3550;
+
+    --reviewer-accent: #e8603c;
+    --reviewer-soft:   #2a1a14;
+    --reviewer-text:   #f5a98a;
+
+    --dev-accent:   #38b28a;
+    --dev-soft:     #0f2420;
+    --dev-text:     #7de0bc;
+
+    --neutral:      #8892a8;
+    --text-primary: #dde3f0;
+    --text-dim:     #58637a;
+
+    --merge-accent: #5b9cf6;
+    --merge-soft:   #0d1e3a;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Header ── */
+  .header {
+    width: 100%;
+    max-width: 860px;
+    padding: 28px 24px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-deep);
+  }
+
+  .header-inner {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+
+  .mr-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--reviewer-accent);
+    background: var(--reviewer-soft);
+    border: 1px solid rgba(232,96,60,.25);
+    padding: 3px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    letter-spacing: .03em;
+  }
+
+  .header-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .progress-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    min-width: 110px;
+  }
+
+  .progress-label {
+    font-size: 10px;
+    color: var(--neutral);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .05em;
+  }
+
+  .progress-bar {
+    width: 110px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--reviewer-accent), var(--dev-accent));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+  }
+
+  /* ── Round separator ── */
+  .round-separator {
+    width: 100%;
+    max-width: 860px;
+    padding: 0 24px;
+    display: none;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .5s, transform .5s;
+  }
+  .round-separator.visible {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .round-inner {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 0 4px;
+  }
+
+  .round-line { flex: 1; height: 1px; background: var(--border); }
+
+  .round-tag {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 4px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  /* ── Chat feed ── */
+  .feed {
+    width: 100%;
+    max-width: 860px;
+    padding: 20px 24px 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* ── Message row ── */
+  .msg-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity .45s cubic-bezier(.4,0,.2,1), transform .45s cubic-bezier(.4,0,.2,1);
+  }
+  .msg-row.visible { opacity: 1; transform: translateY(0); }
+  .msg-row.reviewer { flex-direction: row; }
+  .msg-row.developer { flex-direction: row-reverse; }
+
+  /* Avatar */
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-bottom: 2px;
+  }
+  .reviewer .avatar {
+    background: linear-gradient(135deg, #c94a20, #e8603c);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(232,96,60,.35);
+  }
+  .developer .avatar {
+    background: linear-gradient(135deg, #1e9068, #38b28a);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(56,178,138,.35);
+  }
+
+  /* Bubble */
+  .bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: calc(100% - 90px);
+  }
+  .reviewer .bubble-wrap { align-items: flex-start; }
+  .developer .bubble-wrap { align-items: flex-end; }
+
+  .sender-name {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 1px;
+    padding: 0 4px;
+  }
+  .reviewer .sender-name { color: var(--reviewer-text); }
+  .developer .sender-name { color: var(--dev-text); }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.65;
+    position: relative;
+    word-break: break-word;
+  }
+  .reviewer .bubble {
+    background: var(--bg-message);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: var(--text-primary);
+  }
+  .developer .bubble {
+    background: var(--dev-soft);
+    border: 1px solid rgba(56,178,138,.2);
+    border-bottom-right-radius: 4px;
+    color: var(--text-primary);
+  }
+
+  /* issue list inside bubble */
+  .issue-list {
+    margin: 8px 0 4px;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .issue-list li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 1px;
+    letter-spacing: .04em;
+  }
+  .badge-high   { background: rgba(232,96,60,.18); color: #f5845a; border: 1px solid rgba(232,96,60,.3); }
+  .badge-medium { background: rgba(234,179,8,.12); color: #e8c547; border: 1px solid rgba(234,179,8,.25); }
+  .badge-low    { background: rgba(138,180,248,.1); color: #8ab4f8; border: 1px solid rgba(138,180,248,.2); }
+  .badge-fixed  { background: rgba(56,178,138,.12); color: #38b28a; border: 1px solid rgba(56,178,138,.25); }
+  .badge-p1     { background: rgba(232,96,60,.18); color: #f5845a; border: 1px solid rgba(232,96,60,.3); }
+  .badge-p2     { background: rgba(234,179,8,.12); color: #e8c547; border: 1px solid rgba(234,179,8,.25); }
+
+  /* inline code */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #a8d8b0;
+  }
+
+  /* code block */
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    overflow-x: auto;
+    color: #a8d8b0;
+    line-height: 1.6;
+    white-space: pre;
+  }
+
+  .bubble strong {
+    color: #eef2ff;
+    font-weight: 500;
+  }
+
+  .bubble .sub-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--neutral);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin: 10px 0 4px;
+  }
+
+  /* ── Typing indicator ── */
+  .msg-row.typing .bubble {
+    padding: 14px 18px;
+  }
+  .typing-dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .typing-dots span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--neutral);
+    animation: dot-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: .18s; }
+  .typing-dots span:nth-child(3) { animation-delay: .36s; }
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40%           { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── Merge success card ── */
+  .merge-card {
+    width: 100%;
+    max-width: 860px;
+    padding: 0 24px 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity .6s cubic-bezier(.4,0,.2,1), transform .6s cubic-bezier(.4,0,.2,1);
+  }
+  .merge-card.visible { opacity: 1; transform: translateY(0); }
+
+  .merge-inner {
+    background: var(--merge-soft);
+    border: 1px solid rgba(91,156,246,.25);
+    border-radius: 16px;
+    padding: 24px 28px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .merge-inner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--merge-accent), transparent);
+  }
+
+  .merge-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+    animation: merge-pop .6s cubic-bezier(.34,1.56,.64,1) both;
+    animation-delay: .3s;
+    opacity: 0;
+  }
+  @keyframes merge-pop {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .merge-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--merge-accent);
+    letter-spacing: .02em;
+    margin-bottom: 6px;
+  }
+  .merge-sub {
+    font-size: 13px;
+    color: var(--neutral);
+    letter-spacing: .02em;
+  }
+  .merge-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-pill.resolved { background: rgba(56,178,138,.12); color: var(--dev-text); border: 1px solid rgba(56,178,138,.2); }
+  .stat-pill.rounds   { background: rgba(91,156,246,.1); color: #8ab4f8; border: 1px solid rgba(91,156,246,.2); }
+  .stat-pill.files    { background: rgba(138,180,248,.08); color: #a8b8f0; border: 1px solid rgba(138,180,248,.15); }
+
+  /* ── Replay button ── */
+  .footer {
+    width: 100%;
+    max-width: 860px;
+    padding: 0 24px 48px;
+    display: flex;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .5s;
+  }
+  .footer.visible { opacity: 1; }
+
+  .replay-btn {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-glow);
+    padding: 12px 32px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: background .25s, border-color .25s, transform .2s, box-shadow .25s;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .replay-btn:hover {
+    background: var(--border);
+    border-color: var(--neutral);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .replay-btn:active { transform: translateY(0); }
+  .replay-icon { font-size: 16px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 600px) {
+    .header { padding: 16px 12px 0; }
+    .feed { padding: 16px 12px 100px; }
+    .merge-card, .footer { padding-left: 12px; padding-right: 12px; }
+    .header-title { font-size: 13px; }
+    .progress-wrap { min-width: 80px; }
+    .progress-bar { width: 80px; }
+    .bubble-wrap { max-width: calc(100% - 52px); }
+    .merge-stats { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-inner">
+    <div class="mr-badge">MR !45</div>
+    <div class="header-title">dev-harness — Code Review</div>
+    <div class="progress-wrap">
+      <div class="progress-label" id="progress-label">0 / 16 resolved</div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Round 1 separator -->
+<div class="round-separator" id="sep1">
+  <div class="round-inner">
+    <div class="round-line"></div>
+    <div class="round-tag">Round 1 · Initial Review</div>
+    <div class="round-line"></div>
+  </div>
+</div>
+
+<!-- Feed -->
+<div class="feed" id="feed"></div>
+
+<!-- Merge success -->
+<div class="merge-card" id="merge-card">
+  <div class="merge-inner">
+    <div class="merge-icon">✅</div>
+    <div class="merge-title">All issues resolved — Ready to merge</div>
+    <div class="merge-sub">16개 이슈 모두 해결 · 2 rounds of review</div>
+    <div class="merge-stats">
+      <div class="stat-pill resolved"><span>●</span> 16 issues resolved</div>
+      <div class="stat-pill rounds"><span>◆</span> 2 review rounds</div>
+      <div class="stat-pill files"><span>▲</span> 7 files changed</div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer / Replay -->
+<div class="footer" id="footer">
+  <button class="replay-btn" onclick="replay()">
+    <span class="replay-icon">↺</span> Replay
+  </button>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const ROUNDS = [
+  {
+    id: 'sep1',
+    label: 'Round 1 · Initial Review',
+    messages: [
+      {
+        role: 'reviewer',
+        delay: 0,
+        html: `<strong>총 16개 이슈 발견</strong> — HIGH 5건 핵심 문제:
+<ul class="issue-list">
+  <li><span class="badge badge-high">H1</span><span>protocol.md와 SKILL.md 간 <strong>병렬 실행 설명이 모순</strong>됨</span></li>
+  <li><span class="badge badge-high">H2</span><span><code>next --all</code> + wave 동작 규칙 <strong>미정의</strong></span></li>
+  <li><span class="badge badge-high">H3</span><span>integrate milestone <strong>라이프사이클 미정의</strong></span></li>
+  <li><span class="badge badge-high">H4</span><span>plan.json의 <code>current</code> 필드가 단일값 — wave 병렬 시 <strong>다중 in_progress 표현 불가</strong></span></li>
+  <li><span class="badge badge-high">H5</span><span>dream hook이 <code>in_progress</code> / <code>qa_failed</code> 케이스 <strong>미커버</strong></span></li>
+</ul>
+<div class="sub-header">Medium</div>
+<ul class="issue-list">
+  <li><span class="badge badge-medium">M1</span><span>재시도 횟수 불일치</span></li>
+  <li><span class="badge badge-medium">M2</span><span>patches/ 디렉토리 누락</span></li>
+  <li><span class="badge badge-medium">M3</span><span>recall 파싱 오류 등 3건 추가</span></li>
+</ul>`
+      },
+      {
+        role: 'developer',
+        delay: 3200,
+        html: `전부 수정 완료했습니다.
+<ul class="issue-list">
+  <li><span class="badge badge-fixed">H1 ✓</span><span>protocol.md 모순 해소 — <code>parallel_group</code> 조건 분기 추가</span></li>
+  <li><span class="badge badge-fixed">H4 ✓</span><span><code>current</code>를 배열로 변경
+<div class="code-block">"current": ["M1", "M2"]</div></span></li>
+  <li><span class="badge badge-fixed">H2 ✓</span><span>wave 디스패치, 부분 FAIL, blocked 전파 규칙 명시</span></li>
+  <li><span class="badge badge-fixed">H3 ✓</span><span>integrate contract / QA / status 전이 정의</span></li>
+  <li><span class="badge badge-fixed">H5 ✓</span><span>dream hook에 <code>in_progress</code> / <code>qa_failed</code> 분기 추가</span></li>
+  <li><span class="badge badge-fixed">M+L ✓</span><span>MEDIUM 5건 + LOW 전부 반영</span></li>
+</ul>`
+      }
+    ]
+  },
+  {
+    id: 'sep2',
+    label: 'Round 2 · Re-review',
+    messages: [
+      {
+        role: 'reviewer',
+        delay: 0,
+        html: `4건 검토 — <strong>1건 해결, 3건 미해결</strong>:
+<ul class="issue-list">
+  <li><span class="badge badge-p1">P1 필수</span><span><strong>handoff 컨텍스트 격리 미구현</strong> — OpenAI 기본 handoff는 전체 대화 이력 전달인데 문서는 격리된다고 단정함</span></li>
+  <li><span class="badge badge-p2">P2</span><span><code>playwright-with-hiworks-auth</code>가 이 MR에 없는 <strong>깨진 참조</strong></span></li>
+  <li><span class="badge badge-p2">P2</span><span><code>pnpm</code> 하드코딩 — npm/yarn/bun 프로젝트에서 init 직후 <strong>validation 실패</strong></span></li>
+</ul>`
+      },
+      {
+        role: 'developer',
+        delay: 3200,
+        html: `3건 전부 수정했습니다.
+<ul class="issue-list">
+  <li><span class="badge badge-fixed">P1 ✓</span><span><code>input_filter=remove_all_tools</code> 실제 예시 추가, 기본 동작 명시
+<div class="code-block">handoff:
+  input_filter: remove_all_tools
+  # 기본값: 전체 이력 전달됨</div></span></li>
+  <li><span class="badge badge-fixed">P2-1 ✓</span><span>외부 의존 명시 + fallback 안내 (3개 파일 수정)</span></li>
+  <li><span class="badge badge-fixed">P2-2 ✓</span><span>PM 감지 로직 추가
+<div class="code-block">packageManager → lockfile → npm (fallback)</div></span></li>
+</ul>`
+      }
+    ]
+  }
+];
+
+// ── Animation engine ──────────────────────────────────────────────────────────
+
+let allTimers = [];
+let isRunning = false;
+
+function clearTimers() {
+  allTimers.forEach(t => clearTimeout(t));
+  allTimers = [];
+}
+
+function later(fn, ms) {
+  const t = setTimeout(fn, ms);
+  allTimers.push(t);
+  return t;
+}
+
+function createRow(role, content, isTyping = false) {
+  const row = document.createElement('div');
+  row.className = `msg-row ${role}${isTyping ? ' typing' : ''}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'reviewer' ? 'R' : 'D';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble-wrap';
+
+  const name = document.createElement('div');
+  name.className = 'sender-name';
+  name.textContent = role === 'reviewer' ? 'Reviewer' : 'Developer';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (isTyping) {
+    bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  } else {
+    bubble.innerHTML = content;
+  }
+
+  wrap.appendChild(name);
+  wrap.appendChild(bubble);
+  row.appendChild(avatar);
+  row.appendChild(wrap);
+  return row;
+}
+
+function showSep(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    // create second separator inline in feed
+    const sep = document.createElement('div');
+    sep.id = id;
+    sep.className = 'round-separator';
+    sep.innerHTML = `<div class="round-inner">
+      <div class="round-line"></div>
+      <div class="round-tag">Round 2 · Re-review</div>
+      <div class="round-line"></div>
+    </div>`;
+    document.getElementById('feed').appendChild(sep);
+    requestAnimationFrame(() => {
+      sep.style.display = 'flex';
+      requestAnimationFrame(() => sep.classList.add('visible'));
+    });
+  } else {
+    el.style.display = 'flex';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => el.classList.add('visible'));
+    });
+  }
+}
+
+function scrollToBottom() {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+function setProgress(resolved, total) {
+  document.getElementById('progress-label').textContent = `${resolved} / ${total} resolved`;
+  document.getElementById('progress-fill').style.width = `${(resolved / total) * 100}%`;
+}
+
+function appendMessage(role, html) {
+  const feed = document.getElementById('feed');
+
+  // typing indicator
+  const typingRow = createRow(role, null, true);
+  feed.appendChild(typingRow);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => typingRow.classList.add('visible'));
+  });
+  scrollToBottom();
+
+  return new Promise(resolve => {
+    later(() => {
+      // remove typing, add real
+      feed.removeChild(typingRow);
+      const msgRow = createRow(role, html);
+      feed.appendChild(msgRow);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => msgRow.classList.add('visible'));
+      });
+      scrollToBottom();
+      resolve();
+    }, 1600);
+  });
+}
+
+async function runAnimation() {
+  if (isRunning) return;
+  isRunning = true;
+
+  // reset
+  document.getElementById('feed').innerHTML = '';
+  document.getElementById('merge-card').classList.remove('visible');
+  document.getElementById('footer').classList.remove('visible');
+  document.querySelectorAll('.round-separator').forEach(el => {
+    el.classList.remove('visible');
+    if (el.id !== 'sep1') el.remove();
+    else { el.style.display = ''; }
+  });
+  setProgress(0, 16);
+
+  let cursor = 0; // ms from now
+
+  function queue(fn, offset) {
+    later(() => fn(), cursor + offset);
+  }
+
+  // Round 1
+  queue(() => showSep('sep1'), 200);
+  cursor += 600;
+
+  // Reviewer round 1
+  queue(async () => {
+    await appendMessage('reviewer', ROUNDS[0].messages[0].html);
+    setProgress(0, 16);
+  }, 0);
+  cursor += 3400;
+
+  // Dev round 1
+  queue(async () => {
+    await appendMessage('developer', ROUNDS[0].messages[1].html);
+    setProgress(11, 16);
+  }, 0);
+  cursor += 3800;
+
+  // Round 2 sep
+  queue(() => {
+    showSep('sep2');
+  }, 0);
+  cursor += 800;
+
+  // Reviewer round 2
+  queue(async () => {
+    await appendMessage('reviewer', ROUNDS[1].messages[0].html);
+  }, 0);
+  cursor += 3400;
+
+  // Dev round 2
+  queue(async () => {
+    await appendMessage('developer', ROUNDS[1].messages[1].html);
+    setProgress(16, 16);
+  }, 0);
+  cursor += 3600;
+
+  // Merge card
+  queue(() => {
+    const card = document.getElementById('merge-card');
+    card.classList.add('visible');
+    scrollToBottom();
+  }, 0);
+  cursor += 1000;
+
+  // Footer
+  queue(() => {
+    document.getElementById('footer').classList.add('visible');
+    isRunning = false;
+  }, 0);
+}
+
+function replay() {
+  clearTimers();
+  isRunning = false;
+  runAnimation();
+}
+
+// Autostart
+window.addEventListener('load', () => {
+  setTimeout(runAnimation, 400);
+});
+</script>
+</body>
+</html>

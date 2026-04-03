@@ -22,3 +22,5 @@ Thumbs.db
 .omc/
 
 figma-output/
+presentation/auto-front/raw/
+.DS_Store
