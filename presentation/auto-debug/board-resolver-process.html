@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Board-Resolver Process</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    overflow: hidden;
+    background: #0f172a;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 28px;
+    visibility: hidden;
+  }
+  .title span {
+    color: #3b82f6;
+  }
+
+  .pipeline {
+    position: relative;
+    width: 740px;
+    height: 370px;
+  }
+
+  /* Connector SVG */
+  .connectors {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .connectors path.bg-line {
+    fill: none;
+    stroke: #334155;
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+  }
+  .connector-glow {
+    fill: none;
+    stroke: #3b82f6;
+    stroke-width: 2.5;
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+  }
+
+  /* Phase node */
+  .phase {
+    position: absolute;
+    width: 212px;
+    height: 142px;
+    background: #1e293b;
+    border: 1.5px solid #334155;
+    border-radius: 14px;
+    padding: 12px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    visibility: hidden;
+    z-index: 1;
+  }
+
+  .phase-number {
+    position: absolute;
+    top: -11px;
+    left: 14px;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  .phase-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    line-height: 1;
+  }
+
+  .phase-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #f8fafc;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .phase-subtitle {
+    font-size: 10px;
+    color: #94a3b8;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  .phase-content {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Grid positions: 3 cols top row L->R, bottom row R->L (S-curve) */
+  .phase:nth-child(1) { left: 0;    top: 0; }
+  .phase:nth-child(2) { left: 264px; top: 0; }
+  .phase:nth-child(3) { left: 528px; top: 0; }
+  .phase:nth-child(4) { left: 528px; top: 210px; }
+  .phase:nth-child(5) { left: 264px; top: 210px; }
+  .phase:nth-child(6) { left: 0;    top: 210px; }
+
+  /* ---- Phase 1: Cards ---- */
+  .p1-cards { display: flex; gap: 5px; }
+  .p1-card {
+    width: 40px; height: 50px;
+    background: #334155;
+    border-radius: 5px;
+    border-left: 3px solid #3b82f6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    visibility: hidden;
+  }
+  .p1-card .line {
+    width: 22px; height: 2px;
+    background: #64748b;
+    border-radius: 1px;
+  }
+  .p1-card .line.short { width: 14px; }
+
+  /* ---- Phase 2: Keyword tags ---- */
+  .p2-tags { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+  .p2-tag {
+    font-size: 8px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(59,130,246,0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59,130,246,0.25);
+    visibility: hidden;
+    white-space: nowrap;
+  }
+
+  /* ---- Phase 3: Checklist ---- */
+  .p3-checks { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 0 4px; }
+  .p3-check {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9px; color: #94a3b8;
+    visibility: hidden;
+  }
+  .p3-box {
+    width: 13px; height: 13px;
+    border: 1.5px solid #475569;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #22c55e;
+    flex-shrink: 0;
+  }
+  .p3-box.checked {
+    border-color: #22c55e;
+    background: rgba(34,197,94,0.1);
+  }
+  .p3-loop {
+    position: absolute;
+    right: 10px; bottom: 10px;
+    font-size: 14px;
+    color: #f59e0b;
+    visibility: hidden;
+  }
+
+  /* ---- Phase 4: Score bars ---- */
+  .p4-scores { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+  .p4-row {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9px; color: #94a3b8;
+    visibility: hidden;
+  }
+  .p4-label { width: 14px; text-align: right; font-weight: 600; }
+  .p4-bar-bg {
+    flex: 1; height: 10px;
+    background: #334155;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .p4-bar {
+    height: 100%;
+    border-radius: 5px;
+    width: 0%;
+  }
+  .p4-bar.high { background: linear-gradient(90deg, #22c55e, #4ade80); }
+  .p4-bar.mid  { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .p4-bar.low  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .p4-val { width: 20px; font-weight: 700; color: #f8fafc; font-size: 10px; }
+
+  /* ---- Phase 5: Ranked solutions ---- */
+  .p5-ranks { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+  .p5-item {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 8px;
+    border-radius: 7px;
+    font-size: 9px;
+    color: #cbd5e1;
+    background: #334155;
+    border: 1px solid transparent;
+    visibility: hidden;
+  }
+  .p5-badge {
+    font-size: 8px; font-weight: 700;
+    color: #f59e0b;
+    min-width: 20px;
+  }
+  .p5-score { margin-left: auto; font-weight: 700; color: #94a3b8; font-size: 10px; }
+
+  /* ---- Phase 6: Code diff + progress ---- */
+  .p6-content { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+  .p6-diff { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 8.5px; line-height: 1.5; }
+  .p6-line {
+    padding: 1px 6px;
+    border-radius: 3px;
+    visibility: hidden;
+  }
+  .p6-line.rem { background: rgba(239,68,68,0.12); color: #f87171; }
+  .p6-line.add { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .p6-progress-bg {
+    width: 100%; height: 7px;
+    background: #334155;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .p6-progress {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #22c55e);
+    border-radius: 4px;
+  }
+  .p6-stamp {
+    font-size: 11px;
+    font-weight: 700;
+    color: #22c55e;
+    text-align: center;
+    visibility: hidden;
+    letter-spacing: 0.02em;
+  }
+
+  /* Bottom phase indicator */
+  .current-phase {
+    margin-top: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
+    height: 22px;
+    visibility: hidden;
+    letter-spacing: 0.01em;
+  }
+  .current-phase .cp-num {
+    color: #3b82f6;
+    font-weight: 700;
+  }
+  .current-phase .cp-name {
+    color: #e2e8f0;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="title">
+  <span>Board-Resolver</span> Process
+</div>
+
+<div class="pipeline">
+  <!-- SVG Connectors -->
+  <svg class="connectors" viewBox="0 0 740 370">
+    <!-- Row 1: 1->2 -->
+    <path class="bg-line" d="M212,71 L264,71" />
+    <path class="connector-glow cg1" d="M212,71 L264,71" />
+    <!-- Row 1: 2->3 -->
+    <path class="bg-line" d="M476,71 L528,71" />
+    <path class="connector-glow cg2" d="M476,71 L528,71" />
+    <!-- Col 3: 3->4 (vertical) -->
+    <path class="bg-line" d="M634,142 L634,210" />
+    <path class="connector-glow cg3" d="M634,142 L634,210" />
+    <!-- Row 2: 4->5 -->
+    <path class="bg-line" d="M528,281 L476,281" />
+    <path class="connector-glow cg4" d="M528,281 L476,281" />
+    <!-- Row 2: 5->6 -->
+    <path class="bg-line" d="M264,281 L212,281" />
+    <path class="connector-glow cg5" d="M264,281 L212,281" />
+  </svg>
+
+  <!-- Phase 1 -->
+  <div class="phase" id="p1">
+    <div class="phase-number">1</div>
+    <div class="phase-icon">📋</div>
+    <div class="phase-title">Issue Collection</div>
+    <div class="phase-subtitle">이슈 수집</div>
+    <div class="phase-content">
+      <div class="p1-cards">
+        <div class="p1-card"><div class="line"></div><div class="line short"></div></div>
+        <div class="p1-card"><div class="line"></div><div class="line short"></div></div>
+        <div class="p1-card"><div class="line"></div><div class="line short"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 2 -->
+  <div class="phase" id="p2">
+    <div class="phase-number">2</div>
+    <div class="phase-icon">🔍</div>
+    <div class="phase-title">Codebase Analysis</div>
+    <div class="phase-subtitle">코드 분석</div>
+    <div class="phase-content">
+      <div class="p2-tags">
+        <div class="p2-tag">resolver</div>
+        <div class="p2-tag">API</div>
+        <div class="p2-tag">board</div>
+        <div class="p2-tag">query</div>
+        <div class="p2-tag">config</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 3 -->
+  <div class="phase" id="p3">
+    <div class="phase-number">3</div>
+    <div class="phase-icon">✅</div>
+    <div class="phase-title">Completeness Check</div>
+    <div class="phase-subtitle">정보 검증</div>
+    <div class="phase-content">
+      <div class="p3-checks">
+        <div class="p3-check"><div class="p3-box"></div> Title & Description</div>
+        <div class="p3-check"><div class="p3-box"></div> Properties</div>
+        <div class="p3-check"><div class="p3-box"></div> Code references</div>
+      </div>
+    </div>
+    <div class="p3-loop">🔄</div>
+  </div>
+
+  <!-- Phase 4 -->
+  <div class="phase" id="p4">
+    <div class="phase-number">4</div>
+    <div class="phase-icon">📊</div>
+    <div class="phase-title">Solution Scoring</div>
+    <div class="phase-subtitle">해결안 도출</div>
+    <div class="phase-content">
+      <div class="p4-scores">
+        <div class="p4-row"><div class="p4-label">A</div><div class="p4-bar-bg"><div class="p4-bar high"></div></div><div class="p4-val">92</div></div>
+        <div class="p4-row"><div class="p4-label">B</div><div class="p4-bar-bg"><div class="p4-bar mid"></div></div><div class="p4-val">78</div></div>
+        <div class="p4-row"><div class="p4-label">C</div><div class="p4-bar-bg"><div class="p4-bar low"></div></div><div class="p4-val">45</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 5 -->
+  <div class="phase" id="p5">
+    <div class="phase-number">5</div>
+    <div class="phase-icon">🏆</div>
+    <div class="phase-title">Solution Selection</div>
+    <div class="phase-subtitle">해결안 선택</div>
+    <div class="phase-content">
+      <div class="p5-ranks">
+        <div class="p5-item" id="p5-a"><span class="p5-badge">1st</span> Solution A <span class="p5-score">92</span></div>
+        <div class="p5-item" id="p5-b"><span class="p5-badge">2nd</span> Solution B <span class="p5-score">78</span></div>
+        <div class="p5-item" id="p5-c"><span class="p5-badge">3rd</span> Solution C <span class="p5-score">45</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 6 -->
+  <div class="phase" id="p6">
+    <div class="phase-number">6</div>
+    <div class="phase-icon">🚀</div>
+    <div class="phase-title">Implementation</div>
+    <div class="phase-subtitle">구현 & 테스트</div>
+    <div class="phase-content">
+      <div class="p6-content">
+        <div class="p6-diff">
+          <div class="p6-line rem">- old_resolver(board)</div>
+          <div class="p6-line add">+ new_resolver(board, ctx)</div>
+        </div>
+        <div class="p6-progress-bg"><div class="p6-progress"></div></div>
+        <div class="p6-stamp">Complete &#10003;</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="current-phase">
+  Phase <span class="cp-num">1</span> &mdash; <span class="cp-name">Issue Collection</span>
+</div>
+
+<script>
+(function() {
+  /* ---- Capture API ---- */
+  var CAPTURE_DURATION = 11; // seconds (one full loop + outro + buffer)
+  window.__captureLengthSec = CAPTURE_DURATION;
+  window.__animationReady = false;
+
+  var phaseNames = [
+    "Issue Collection",
+    "Codebase Analysis",
+    "Completeness Check",
+    "Solution Scoring",
+    "Solution Selection",
+    "Implementation"
+  ];
+
+  /* ---------- helpers ---------- */
+  function setIndicator(tl, num, pos) {
+    tl.call(function() {
+      document.querySelector(".cp-num").textContent = num;
+      document.querySelector(".cp-name").textContent = phaseNames[num - 1];
+    }, null, pos);
+  }
+
+  function glowOn(tl, sel, pos) {
+    tl.to(sel, {
+      boxShadow: "0 0 28px 6px rgba(59,130,246,0.35)",
+      borderColor: "#3b82f6",
+      scale: 1.045,
+      duration: 0.3,
+      ease: "power2.out"
+    }, pos);
+  }
+
+  function glowOff(tl, sel, pos) {
+    tl.to(sel, {
+      boxShadow: "0 0 0 0 rgba(59,130,246,0)",
+      borderColor: "#334155",
+      scale: 1,
+      autoAlpha: 0.4,
+      duration: 0.3,
+      ease: "power2.inOut"
+    }, pos);
+  }
+
+  function drawLine(tl, sel, pos) {
+    tl.to(sel, {
+      strokeDashoffset: 0,
+      duration: 0.25,
+      ease: "power2.inOut"
+    }, pos);
+  }
+
+  /* ---------- initial state ---------- */
+  gsap.set(".title", { autoAlpha: 0, y: -12 });
+  gsap.set(".current-phase", { autoAlpha: 0 });
+  gsap.set(".phase", { autoAlpha: 0, y: 14 });
+  gsap.set("#p1 .p1-card", { autoAlpha: 0, x: -24 });
+  gsap.set("#p2 .p2-tag", { autoAlpha: 0, y: 12, scale: 0.7 });
+  gsap.set("#p3 .p3-check", { autoAlpha: 0, x: -12 });
+  gsap.set("#p3 .p3-loop", { autoAlpha: 0, rotation: -90 });
+  gsap.set("#p4 .p4-row", { autoAlpha: 0 });
+  gsap.set("#p4 .p4-bar", { width: "0%" });
+  gsap.set("#p5 .p5-item", { autoAlpha: 0, x: 20 });
+  gsap.set("#p6 .p6-line", { autoAlpha: 0, x: -14 });
+  gsap.set("#p6 .p6-progress", { width: "0%" });
+  gsap.set("#p6 .p6-stamp", { autoAlpha: 0, scale: 0.4 });
+
+  /* ---------- reset function (for seamless loop) ---------- */
+  function resetAll() {
+    gsap.set(".connector-glow", { strokeDashoffset: 1000, autoAlpha: 1 });
+    gsap.set(".phase", {
+      autoAlpha: 0, scale: 1, y: 14,
+      boxShadow: "0 0 0 0 rgba(59,130,246,0)",
+      borderColor: "#334155"
+    });
+    gsap.set(".title", { autoAlpha: 0, y: -12 });
+    gsap.set(".current-phase", { autoAlpha: 0 });
+    gsap.set("#p1 .p1-card", { autoAlpha: 0, x: -24 });
+    gsap.set("#p2 .p2-tag", { autoAlpha: 0, y: 12, scale: 0.7 });
+    document.querySelectorAll("#p3 .p3-check").forEach(function(c) {
+      gsap.set(c, { autoAlpha: 0, x: -12 });
+      var box = c.querySelector(".p3-box");
+      box.textContent = "";
+      box.classList.remove("checked");
+    });
+    gsap.set("#p3 .p3-loop", { autoAlpha: 0, rotation: -90 });
+    gsap.set("#p4 .p4-row", { autoAlpha: 0 });
+    gsap.set("#p4 .p4-bar", { width: "0%" });
+    gsap.set("#p5 .p5-item", { autoAlpha: 0, x: 20, boxShadow: "none", borderColor: "transparent", background: "#334155" });
+    gsap.set("#p6 .p6-line", { autoAlpha: 0, x: -14 });
+    gsap.set("#p6 .p6-progress", { width: "0%" });
+    gsap.set("#p6 .p6-stamp", { autoAlpha: 0, scale: 0.4 });
+    gsap.set("#p6", { boxShadow: "0 0 0 0 rgba(34,197,94,0)", borderColor: "#334155" });
+  }
+
+  /* ---------- master timeline ---------- */
+  var tl = gsap.timeline({
+    repeat: 0,
+    paused: true,
+    defaults: { ease: "power2.out" }
+  });
+
+  /* ===== INTRO ===== */
+  tl.addLabel("intro", 0);
+  tl.to(".title", { autoAlpha: 1, y: 0, duration: 0.4 }, "intro");
+  tl.to(".phase", { autoAlpha: 1, y: 0, duration: 0.3, stagger: 0.07 }, "intro+=0.15");
+  tl.to(".current-phase", { autoAlpha: 1, duration: 0.3 }, "intro+=0.5");
+
+  /* ===== PHASE 1: Issue Collection ===== */
+  tl.addLabel("phase1", "intro+=0.7");
+  setIndicator(tl, 1, "phase1");
+  glowOn(tl, "#p1", "phase1");
+  tl.to("#p1 .p1-card", { autoAlpha: 1, x: 0, duration: 0.25, stagger: 0.1 }, "phase1+=0.15");
+  drawLine(tl, ".cg1", "phase1+=0.65");
+
+  /* ===== PHASE 2: Codebase Analysis ===== */
+  tl.addLabel("phase2", "phase1+=0.85");
+  setIndicator(tl, 2, "phase2");
+  glowOff(tl, "#p1", "phase2");
+  glowOn(tl, "#p2", "phase2");
+  tl.to("#p2 .p2-tag", { autoAlpha: 1, y: 0, scale: 1, duration: 0.2, stagger: 0.06 }, "phase2+=0.12");
+  drawLine(tl, ".cg2", "phase2+=0.65");
+
+  /* ===== PHASE 3: Completeness Check ===== */
+  tl.addLabel("phase3", "phase2+=0.85");
+  setIndicator(tl, 3, "phase3");
+  glowOff(tl, "#p2", "phase3");
+  glowOn(tl, "#p3", "phase3");
+
+  var checks = document.querySelectorAll("#p3 .p3-check");
+  checks.forEach(function(c, i) {
+    tl.to(c, { autoAlpha: 1, x: 0, duration: 0.15 }, "phase3+=" + (0.12 + i * 0.15));
+    tl.call(function() {
+      var box = c.querySelector(".p3-box");
+      box.textContent = "\u2713";
+      box.classList.add("checked");
+    }, null, "phase3+=" + (0.22 + i * 0.15));
+  });
+
+  tl.to("#p3 .p3-loop", { autoAlpha: 1, rotation: 0, duration: 0.35, ease: "back.out(1.4)" }, "phase3+=0.55");
+  drawLine(tl, ".cg3", "phase3+=0.85");
+
+  /* ===== PHASE 4: Solution Scoring ===== */
+  tl.addLabel("phase4", "phase3+=1.05");
+  setIndicator(tl, 4, "phase4");
+  glowOff(tl, "#p3", "phase4");
+  glowOn(tl, "#p4", "phase4");
+
+  tl.to("#p4 .p4-row", { autoAlpha: 1, duration: 0.15, stagger: 0.08 }, "phase4+=0.1");
+  tl.to("#p4 .p4-bar.high", { width: "92%", duration: 0.4, ease: "power3.out" }, "phase4+=0.3");
+  tl.to("#p4 .p4-bar.mid",  { width: "78%", duration: 0.4, ease: "power3.out" }, "phase4+=0.36");
+  tl.to("#p4 .p4-bar.low",  { width: "45%", duration: 0.4, ease: "power3.out" }, "phase4+=0.42");
+  drawLine(tl, ".cg4", "phase4+=0.85");
+
+  /* ===== PHASE 5: Solution Selection ===== */
+  tl.addLabel("phase5", "phase4+=1.05");
+  setIndicator(tl, 5, "phase5");
+  glowOff(tl, "#p4", "phase5");
+  glowOn(tl, "#p5", "phase5");
+
+  tl.to("#p5 .p5-item", { autoAlpha: 1, x: 0, duration: 0.2, stagger: 0.08 }, "phase5+=0.12");
+  tl.to("#p5-a", {
+    background: "rgba(59,130,246,0.18)",
+    borderColor: "#3b82f6",
+    boxShadow: "0 0 10px 2px rgba(59,130,246,0.3)",
+    duration: 0.3
+  }, "phase5+=0.5");
+  drawLine(tl, ".cg5", "phase5+=0.75");
+
+  /* ===== PHASE 6: Implementation ===== */
+  tl.addLabel("phase6", "phase5+=0.95");
+  setIndicator(tl, 6, "phase6");
+  glowOff(tl, "#p5", "phase6");
+  glowOn(tl, "#p6", "phase6");
+
+  tl.to("#p6 .p6-line.rem", { autoAlpha: 1, x: 0, duration: 0.2 }, "phase6+=0.12");
+  tl.to("#p6 .p6-line.add", { autoAlpha: 1, x: 0, duration: 0.2 }, "phase6+=0.28");
+  tl.to("#p6 .p6-progress", { width: "100%", duration: 0.55, ease: "power2.inOut" }, "phase6+=0.42");
+  tl.to("#p6 .p6-stamp", { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, "phase6+=0.95");
+
+  // Final green glow
+  tl.to("#p6", {
+    boxShadow: "0 0 32px 8px rgba(34,197,94,0.4)",
+    borderColor: "#22c55e",
+    duration: 0.35
+  }, "phase6+=1.1");
+
+  /* ===== OUTRO: fade out ===== */
+  tl.addLabel("outro", "phase6+=1.7");
+  tl.to([".phase", ".title", ".current-phase"], {
+    autoAlpha: 0,
+    duration: 0.5,
+    ease: "power2.inOut"
+  }, "outro");
+  tl.to(".connector-glow, .bg-line", { autoAlpha: 0, duration: 0.5, ease: "power2.inOut" }, "outro");
+
+  /* ---- Capture API: expose start function ---- */
+  window.startBoardResolverAnimation = function() {
+    tl.play();
+  };
+
+  /* Auto-play when opened directly in browser (not via capture script) */
+  if (!navigator.webdriver) {
+    tl.play();
+  }
+
+  window.__animationReady = true;
+})();
+</script>
+</body>
+</html>
