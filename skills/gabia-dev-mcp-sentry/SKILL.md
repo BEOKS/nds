@@ -7,8 +7,9 @@ description: Sentry REST API를 직접 호출해 이슈 상세 조회, 이슈 �
 
 ## 제공 기능
 
-- **프로젝트 목록 조회**: 조직 내 Sentry 프로젝트 목록 확인
+- **프로젝트 목록 조회**: 조직 내 Sentry 프로젝트 목록 확인 (이름/slug 검색, 전체 페이지 탐색)
 - **이슈 검색**: 키워드, 프로젝트, 환경 필터로 이슈 검색
+- **최신 이슈 빠른 조회**: 프로젝트 이름/slug로 가장 최근 이슈 1건 즉시 조회
 - **이슈 상세 조회**: 이슈 ID 또는 Sentry URL로 상세 정보 확인
 - **이벤트/스택트레이스 조회**: 이슈에 연결된 이벤트 목록 및 상세 조회
 - **이슈 상태 변경**: resolved, unresolved, ignored 상태 전환
@@ -25,8 +26,9 @@ description: Sentry REST API를 직접 호출해 이슈 상세 조회, 이슈 �
 
 1. Sentry URL이 주어지면 → `url-info` 명령으로 이슈 상세 + 최신 이벤트 조회
 2. 키워드로 이슈를 찾고 싶으면 → `issues --query` 명령으로 검색
-3. 특정 이슈의 스택트레이스가 필요하면 → `event-get {issue_id} latest --full`
-4. 프로젝트 ID를 모르면 → `projects` 명령으로 목록 확인 후 `--project` 필터 사용
+3. 특정 이슈의 스택트레이스가 필요하면 → `issue-events {issue_id} --full` 또는 `event-get {issue_id} latest`
+4. 프로젝트 이름/slug로 최신 이슈 바로 조회 → `issue-latest --project <slug|name>`
+5. 프로젝트 이름/slug를 모르면 → `projects --query <키워드>` 또는 `projects --all`로 검색
 
 ## 예시
 
@@ -38,10 +40,20 @@ python3 scripts/sentry_cli.py url-info \
   --with-latest
 ```
 
-### 프로젝트 목록 확인
+### 프로젝트 목록 확인 및 검색
 
 ```bash
+# 전체 목록 (첫 페이지)
 python3 scripts/sentry_cli.py projects
+
+# 이름/slug 부분 일치 검색 (전체 페이지 탐색)
+python3 scripts/sentry_cli.py projects --query contract-internal-api --all
+
+# slug exact match
+python3 scripts/sentry_cli.py projects --slug contract-internal-api
+
+# 결과 개수 제한
+python3 scripts/sentry_cli.py projects --all --limit 20
 ```
 
 ### 이슈 검색 (키워드)
@@ -70,14 +82,33 @@ python3 scripts/sentry_cli.py issue-get "https://sentry.gabia.io:9000/organizati
 ### 이벤트/스택트레이스 조회
 
 ```bash
-# 이슈의 이벤트 목록
-python3 scripts/sentry_cli.py issue-events 29934
+# 이슈의 이벤트 목록 (본문/스택트레이스 포함)
+python3 scripts/sentry_cli.py issue-events 29934 --full
 
-# 최신 이벤트 상세 (스택트레이스 포함)
+# 최신 이벤트 단일 상세 조회
 python3 scripts/sentry_cli.py event-get 29934 latest
 
-# 특정 이벤트 ID로 조회
+# 특정 이벤트 ID로 단일 상세 조회
 python3 scripts/sentry_cli.py event-get 29934 abc123def456
+```
+
+> `issue-events --full`: 이벤트 목록 + 각 이벤트 본문(스택트레이스 등) 포함
+> `event-get latest`: 최신 이벤트 1건 상세 조회
+
+### 가장 최근 이슈 빠르게 조회
+
+```bash
+# 프로젝트 slug로 최신 이슈 1건 (모든 상태)
+python3 scripts/sentry_cli.py issue-latest --project contract-internal-api
+
+# 미해결 이슈 중 최신 1건
+python3 scripts/sentry_cli.py issue-latest --project contract-internal-api --status unresolved
+
+# 최신 이슈 + 해당 이벤트 상세까지 한 번에
+python3 scripts/sentry_cli.py issue-latest --project contract-internal-api --with-latest-event
+
+# 프로젝트 숫자 ID도 사용 가능
+python3 scripts/sentry_cli.py issue-latest --project 84 --status any
 ```
 
 ### 이슈 상태 변경
