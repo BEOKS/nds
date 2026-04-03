@@ -64,9 +64,9 @@ else
 fi
 echo ""
 
-echo "[TEST 4] configure_environment_variables 함수에 새 환경변수 포함 확인"
+echo "[TEST 4] configure_environment_variables 함수에 주요 환경변수 포함 확인"
 MISSING=""
-for var in CONFLUENCE_BASE_URL SENTRY_TOKEN LDAP_USER LDAP_PWD HIWORKS_ID HIWORKS_DOMAIN HIWORKS_PWD; do
+for var in CONFLUENCE_BASE_URL SENTRY_TOKEN LDAP_USER LDAP_PWD ORACLE_HOST MYSQL_HOST; do
     if grep -q "$var" /tmp/install.sh; then
         echo "  ✅ $var 존재"
     else
